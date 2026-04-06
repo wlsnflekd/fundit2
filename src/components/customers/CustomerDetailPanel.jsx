@@ -60,6 +60,15 @@ function formatBizRegNo(value) {
   return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`
 }
 
+// ─── 날짜 연도 4자리 강제 (type="date" 6자리 입력 방지) ───────────────────────
+function clampDateYear(val) {
+  if (!val) return null
+  const parts = val.split('-')
+  if (parts.length !== 3) return val || null
+  const year = parts[0].slice(0, 4)
+  return `${year}-${parts[1]}-${parts[2]}`
+}
+
 // ─── 색상 배지 (읽기 모드) ────────────────────────────────────────────────────
 function ColorBadge({ value, config }) {
   if (!value) return <span style={{ color: '#6b84a8', fontSize: 13 }}>-</span>
@@ -320,8 +329,10 @@ function TabBasic({ data, onChange, consultants, isAdmin, canViewAuth }) {
         <input
           type="date"
           style={inputStyle}
-          value={data.received_date ?? ''}
-          onChange={e => onChange('received_date', e.target.value || null)}
+          value={clampDateYear(data.received_date) ?? ''}
+          onChange={e => onChange('received_date', clampDateYear(e.target.value))}
+          min="1900-01-01"
+          max="2099-12-31"
         />
       </FieldWrapper>
 
@@ -348,8 +359,10 @@ function TabBasic({ data, onChange, consultants, isAdmin, canViewAuth }) {
         <input
           type="date"
           style={inputStyle}
-          value={data.birth_date ?? ''}
-          onChange={e => onChange('birth_date', e.target.value || null)}
+          value={clampDateYear(data.birth_date) ?? ''}
+          onChange={e => onChange('birth_date', clampDateYear(e.target.value))}
+          min="1900-01-01"
+          max="2099-12-31"
         />
       </FieldWrapper>
 
@@ -357,8 +370,10 @@ function TabBasic({ data, onChange, consultants, isAdmin, canViewAuth }) {
         <input
           type="date"
           style={inputStyle}
-          value={data.business_reg_date ?? ''}
-          onChange={e => onChange('business_reg_date', e.target.value || null)}
+          value={clampDateYear(data.business_reg_date) ?? ''}
+          onChange={e => onChange('business_reg_date', clampDateYear(e.target.value))}
+          min="1900-01-01"
+          max="2099-12-31"
         />
       </FieldWrapper>
 
