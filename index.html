@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FUNDIT</title>
+    <!-- 구글 폰트 preconnect — DNS/TLS 핸드셰이크를 미리 처리해 폰트 로드 지연 최소화 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- 폰트 로드 (display=swap: 폰트 로딩 중에도 폴백 폰트로 즉시 렌더링) -->
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+    <!-- 로딩 스피너 keyframe — index.css는 JS 번들 안에 있어 늦게 로드되므로 여기 직접 선언 -->
+    <style>
+      @keyframes fundit-spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
+
+    <!-- 테마 플래시 방지 (1단계): React 마운트 전 <html> 배경색 + :root CSS 변수 즉시 적용
+         body/root는 이 시점에 미파싱이므로 documentElement만 설정 가능
+         CSS 변수 업데이트: PageLoadingFallback이 var(--s1) 등을 참조하므로 반드시 필요 -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('fundit-theme') || 'dark';
+          var dark = t !== 'light';
+          var v = dark
+            ? { base:'#03060d', s1:'#070d1a', s2:'#0b1224', s3:'#101a30', line:'#1c2b44', text:'#eaf0ff', sub:'#6b84a8', gold:'#f0b840' }
+            : { base:'#ffffff', s1:'#f8f9fa', s2:'#ffffff', s3:'#e9ecef', line:'#ced4da', text:'#212529', sub:'#6c757d', gold:'#f0b840' };
+          var el = document.documentElement;
+          el.style.background = v.base;
+          el.style.color = v.text;
+          for (var k in v) el.style.setProperty('--' + k, v[k]);
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root">
+      <!-- React 마운트 전 로딩 화면: React가 마운트되면 자동으로 대체됨 -->
+      <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;">
+        <div style="text-align:center;">
+          <div style="font-family:'Bebas Neue',cursive;font-size:36px;background:linear-gradient(135deg,#f0b840,#d4952a);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:0.06em;margin-bottom:20px;">FUNDIT</div>
+          <div style="width:26px;height:26px;border:2px solid #f0b840;border-top-color:transparent;border-radius:50%;margin:0 auto;animation:fundit-spin 0.8s linear infinite;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 테마 플래시 방지 (2단계): body와 #root가 파싱된 직후 배경색 + CSS 변수 재적용
+         head 스크립트와 동일한 로직 — body/root는 이 시점부터 접근 가능 -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('fundit-theme') || 'dark';
+          var dark = t !== 'light';
+          var v = dark
+            ? { base:'#03060d', s1:'#070d1a', s2:'#0b1224', s3:'#101a30', line:'#1c2b44', text:'#eaf0ff', sub:'#6b84a8', gold:'#f0b840' }
+            : { base:'#ffffff', s1:'#f8f9fa', s2:'#ffffff', s3:'#e9ecef', line:'#ced4da', text:'#212529', sub:'#6c757d', gold:'#f0b840' };
+          var el = document.documentElement;
+          el.style.background = v.base;
+          el.style.color = v.text;
+          for (var k in v) el.style.setProperty('--' + k, v[k]);
+          document.body.style.background = v.base;
+          document.body.style.color = v.text;
+          var root = document.getElementById('root');
+          if (root) root.style.background = v.base;
+        } catch (e) {}
+      })();
+    </script>
+
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

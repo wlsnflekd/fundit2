@@ -1,0 +1,72 @@
+/* 폰트는 index.html <link>로 로드됨 (preconnect + display=swap) */
+
+/* ThemeProvider 밖(loading 화면, PageLoadingFallback, ErrorBoundary)에서
+   var() 참조가 필요한 경우를 위한 CSS 변수 — 다크 모드 기본값 */
+:root {
+  --base: #03060d;
+  --s1:   #070d1a;
+  --s2:   #0b1224;
+  --s3:   #101a30;
+  --line: #1c2b44;
+  --text: #eaf0ff;
+  --sub:  #6b84a8;
+  --gold: #f0b840;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  /* background/color는 index.html inline script + theme.jsx useEffect가 제어
+     하드코딩하면 테마 전환 시 깜빡임 발생 */
+  font-family: 'Noto Sans KR', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+}
+
+h1, h2, h3, .brand {
+  font-family: 'Bebas Neue', sans-serif;
+  letter-spacing: 0.04em;
+}
+
+button {
+  font-family: 'Noto Sans KR', sans-serif;
+  cursor: pointer;
+}
+
+input, textarea, select {
+  font-family: 'Noto Sans KR', sans-serif;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #070d1a;
+}
+::-webkit-scrollbar-thumb {
+  background: #1c2b44;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2a3f5f;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
