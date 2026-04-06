@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useT } from '../theme.jsx'
 import { Button } from './Common.jsx'
 import CustomerDetailPanel, { STATUS_CONFIG } from './customers/CustomerDetailPanel.jsx'
-import { supabase, getCustomers, createCustomer, createAssignmentNotification } from '../supabase.js'
+import { supabase, getCustomers, deleteCustomer, createCustomer, createAssignmentNotification } from '../supabase.js'
 
 const STATUS_LIST = Object.keys(STATUS_CONFIG)
 const STATUS_FILTERS = ['전체', ...STATUS_LIST]
@@ -240,6 +240,31 @@ export default function Customers({ consultantFilter, profile }) {
     setCustomers(prev => [enriched, ...prev])
   }
 
+  const [deleteConfirm, setDeleteConfirm] = useState(null) // { id, company }
+  const [deleting, setDeleting] = useState(false)
+
+  const handleDelete = (e, c) => {
+    e.stopPropagation()
+    setDeleteConfirm({ id: c.id, company: c.company })
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm) return
+    setDeleting(true)
+    const { error } = await deleteCustomer(deleteConfirm.id)
+    setDeleting(false)
+    if (error) {
+      console.error('deleteCustomer error:', error)
+      alert('삭제 중 오류가 발생했습니다.')
+    } else {
+      setCustomers(prev => prev.filter(c => c.id !== deleteConfirm.id))
+      if (selected?.id === deleteConfirm.id) setSelected(null)
+    }
+    setDeleteConfirm(null)
+  }
+
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'superadmin'
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -285,6 +310,7 @@ export default function Customers({ consultantFilter, profile }) {
                 <th style={th}>연락처</th>
                 <th style={th}>업종</th>
                 <th style={th}>접수일</th>
+                {isAdmin && <th style={{ ...th, width: 36, textAlign: 'center' }}></th>}
               </tr>
             </thead>
             <tbody>
@@ -338,6 +364,21 @@ export default function Customers({ consultantFilter, profile }) {
                   <td style={{ ...td, color: C.sub }}>{c.phone || '-'}</td>
                   <td style={{ ...td, color: C.sub }}>{c.industry || '-'}</td>
                   <td style={{ ...td, color: C.sub }}>{c.received_date || '-'}</td>
+                  {isAdmin && (
+                    <td style={{ ...td, textAlign: 'center', padding: '10px 8px' }} onClick={e => e.stopPropagation()}>
+                      <button
+                        onClick={e => handleDelete(e, c)}
+                        title="고객사 삭제"
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          color: C.sub, fontSize: 14, padding: '2px 4px', borderRadius: 4,
+                          lineHeight: 1, transition: 'color 0.15s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.color = '#dc3545' }}
+                        onMouseLeave={e => { e.currentTarget.style.color = C.sub }}
+                      >🗑</button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -356,6 +397,36 @@ export default function Customers({ consultantFilter, profile }) {
           onClose={() => setShowRegister(false)}
           onCreated={handleCreated}
         />
+      )}
+
+      {deleteConfirm && (
+        <>
+          <div onClick={() => !deleting && setDeleteConfirm(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(3,6,13,0.7)', zIndex: 200 }} />
+          <div style={{
+            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
+            background: '#0b1224', border: '1px solid #1c2b44', borderRadius: 14,
+            padding: '28px 32px', zIndex: 201, width: 360, boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
+          }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#eaf0ff', marginBottom: 10 }}>고객사 삭제</div>
+            <div style={{ fontSize: 13, color: '#6b84a8', lineHeight: 1.7, marginBottom: 24 }}>
+              <span style={{ color: '#eaf0ff', fontWeight: 600 }}>{deleteConfirm.company}</span>를<br />
+              정말 삭제하시겠습니까?<br />
+              <span style={{ color: '#dc3545', fontSize: 12 }}>관련된 모든 데이터가 함께 삭제되며 복구할 수 없습니다.</span>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                disabled={deleting}
+                style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #1c2b44', background: 'none', color: '#6b84a8', fontSize: 13, cursor: 'pointer' }}
+              >취소</button>
+              <button
+                onClick={confirmDelete}
+                disabled={deleting}
+                style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: '#dc3545', color: '#fff', fontSize: 13, fontWeight: 700, cursor: deleting ? 'not-allowed' : 'pointer', opacity: deleting ? 0.6 : 1 }}
+              >{deleting ? '삭제 중...' : '삭제'}</button>
+            </div>
+          </div>
+        </>
       )}
 
       {selected && (

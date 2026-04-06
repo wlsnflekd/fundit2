@@ -67,15 +67,16 @@ const SASubscriptions    = lazy(() => import('./components/SASubscriptions.jsx')
 const SAStats            = lazy(() => import('./components/SAStats.jsx'))
 
 const ADMIN_TABS = [
-  { id: 'dashboard',    label: '대시보드',   icon: '▦' },
-  { id: 'customers',   label: '고객사 관리', icon: '◉' },
-  { id: 'applications',label: '신청건 관리', icon: '◈' },
-  { id: 'funds',       label: '정책자금',    icon: '◎' },
-  { id: 'schedule',    label: '일정 관리',   icon: '◷' },
-  { id: 'distribution',label: '고객사 배분', icon: '◐' },
-  { id: 'team',        label: '팀 관리',     icon: '◑' },
-  { id: 'stats',       label: '통계',        icon: '◬' },
-  { id: 'settings',    label: '설정',        icon: '◌' },
+  { id: 'dashboard',    label: '대시보드',          icon: '▦' },
+  { id: 'customers',   label: '고객사 관리 (전체)', icon: '◉' },
+  { id: 'my-customers',label: '고객사 관리 (내 고객사)', icon: '◎' },
+  { id: 'applications',label: '신청건 관리',        icon: '◈' },
+  { id: 'funds',       label: '정책자금',           icon: '◎' },
+  { id: 'schedule',    label: '일정 관리',          icon: '◷' },
+  { id: 'distribution',label: '고객사 배분',        icon: '◐' },
+  { id: 'team',        label: '팀 관리',            icon: '◑' },
+  { id: 'stats',       label: '통계',               icon: '◬' },
+  { id: 'settings',    label: '설정',               icon: '◌' },
 ]
 
 const CONSULTANT_TABS = [

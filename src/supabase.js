@@ -328,12 +328,14 @@ export const getDashboardStats = async (profile = null) => {
 const SAFE_CUSTOMER_COLS = [
   'id', 'workspace_id', 'company', 'ceo', 'industry', 'employees', 'revenue',
   'consultant', 'pool', 'tags', 'score', 'status', 'lead_source', 'phone',
-  'business_type', 'region', 'business_age', 'received_date', 'received_month',
-  'birth_date', 'business_reg_date', 'contract_amount', 'commission_rate',
-  'consultation_memo', 'monthly_revenue', 'prev_year_revenue', 'prev2_year_revenue',
-  'existing_loan', 'required_funds', 'credit_score', 'tax_delinquent',
-  'overdue_history', 'rehabilitation', 'is_exporter', 'smart_device',
-  'closure_history', 'employee_count', 'policy_fund_usage', 'created_at',
+  'business_type', 'business_reg_no', 'region', 'business_age',
+  'received_date', 'birth_date', 'business_reg_date',
+  'contract_amount', 'commission_rate', 'consultation_memo',
+  'monthly_revenue', 'prev_year_revenue', 'prev2_year_revenue',
+  'existing_loan', 'required_funds', 'kcb_score', 'nice_score',
+  'tax_delinquent', 'overdue_history', 'rehabilitation', 'is_exporter',
+  'smart_device', 'closure_history', 'employee_count', 'policy_fund_usage',
+  'created_at',
 ].join(', ')
 
 // workspace 내 고객사 전체 조회 (RLS로 tenant 격리, 민감 컬럼 제외)
@@ -343,6 +345,15 @@ export const getCustomers = async () => {
     .select(SAFE_CUSTOMER_COLS)
     .order('created_at', { ascending: false })
   return { data, error }
+}
+
+// 고객사 삭제 (admin 전용 — 연관 applications cascade 삭제됨)
+export const deleteCustomer = async (customerId) => {
+  const { error } = await supabase
+    .from('customers')
+    .delete()
+    .eq('id', customerId)
+  return { error }
 }
 
 // 인증정보 민감 컬럼 조회 (aippin, sbiz, 주민번호)
