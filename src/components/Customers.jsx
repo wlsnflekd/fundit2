@@ -371,11 +371,11 @@ export default function Customers({ consultantFilter, profile }) {
                         title="고객사 삭제"
                         style={{
                           background: 'none', border: 'none', cursor: 'pointer',
-                          color: C.sub, fontSize: 14, padding: '2px 4px', borderRadius: 4,
-                          lineHeight: 1, transition: 'color 0.15s',
+                          color: '#dc3545', fontSize: 17, padding: '2px 6px', borderRadius: 4,
+                          lineHeight: 1, transition: 'opacity 0.15s',
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.color = '#dc3545' }}
-                        onMouseLeave={e => { e.currentTarget.style.color = C.sub }}
+                        onMouseEnter={e => { e.currentTarget.style.opacity = '0.7' }}
+                        onMouseLeave={e => { e.currentTarget.style.opacity = '1' }}
                       >🗑</button>
                     </td>
                   )}
