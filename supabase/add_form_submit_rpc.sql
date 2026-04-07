@@ -25,7 +25,8 @@ CREATE OR REPLACE FUNCTION public.submit_customer_form(
   p_required_funds  numeric   DEFAULT NULL,
   p_consultation_memo text    DEFAULT NULL,
   p_tags            text[]    DEFAULT NULL,
-  p_received_date   date      DEFAULT NULL
+  p_received_date   date      DEFAULT NULL,
+  p_business_reg_no text      DEFAULT NULL
 )
 RETURNS uuid   -- 생성된 customer id 반환
 LANGUAGE plpgsql
@@ -64,7 +65,8 @@ BEGIN
     received_date,
     status,
     score,
-    pool
+    pool,
+    business_reg_no
   ) VALUES (
     p_workspace_id,
     trim(p_company),
@@ -80,9 +82,10 @@ BEGIN
     p_consultation_memo,
     p_tags,
     COALESCE(p_received_date, CURRENT_DATE),
-    '신청예정',
+    '신규',
     0,
-    false
+    false,
+    p_business_reg_no
   )
   RETURNING id INTO v_customer_id;
 
@@ -92,5 +95,5 @@ $$;
 
 -- anon + authenticated 모두 호출 가능
 GRANT EXECUTE ON FUNCTION public.submit_customer_form(
-  uuid, text, text, text, text, text, text, int, numeric, boolean, numeric, text, text[], date
+  uuid, text, text, text, text, text, text, int, numeric, boolean, numeric, text, text[], date, text
 ) TO anon, authenticated;

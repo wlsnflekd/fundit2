@@ -44,12 +44,22 @@ var COL = {
 // ── 워크스페이스 ID ─────────────────────────────────────────
 var WORKSPACE_ID = 'a1650b9e-31da-43e6-9179-17390d06f58c';
 
-// ── 메인 트리거 함수 ────────────────────────────────────────
-function onFormSubmit(e) {
+// ── 메인 트리거 함수 (외부 폼 → 시트 행 추가 시 자동 실행) ──
+// 트리거 설정: 이벤트 소스 = 스프레드시트에서 / 이벤트 유형 = 변경 시
+function onSheetChange(e) {
+  // 행 추가(INSERT_ROW)일 때만 처리
+  if (e && e.changeType !== 'INSERT_ROW') return;
+
   try {
-    var row = getRowFromEvent(e);
+    var row = getLastRow();
     if (!row) {
       Logger.log('[ERROR] 행 데이터를 가져올 수 없습니다.');
+      return;
+    }
+
+    // 업체명(COL.업체명)이 비어 있으면 헤더행 또는 빈 행 → 스킵
+    if (!row[COL.업체명] || String(row[COL.업체명]).trim() === '') {
+      Logger.log('[SKIP] 빈 행 또는 헤더행 감지, 처리 생략');
       return;
     }
 
@@ -69,23 +79,17 @@ function onFormSubmit(e) {
   }
 }
 
-// ── 이벤트에서 행 배열 추출 ─────────────────────────────────
-function getRowFromEvent(e) {
-  // 폼 제출 이벤트 → e.values 배열
-  if (e && e.values) {
-    return e.values;
-  }
-
-  // 수동 테스트 실행 시 → 시트에서 마지막 행 읽기
+// ── 시트에서 마지막 행 읽기 ──────────────────────────────────
+function getLastRow() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet()
                              .getSheetByName('종합시트');
   if (!sheet) {
     Logger.log('[ERROR] "종합시트" 시트를 찾을 수 없습니다.');
     return null;
   }
-
   var lastRow  = sheet.getLastRow();
   var numCols  = sheet.getLastColumn();
+  if (lastRow < 2) return null; // 헤더만 있는 경우
   var rowRange = sheet.getRange(lastRow, 1, 1, numCols);
   return rowRange.getValues()[0];
 }
@@ -103,11 +107,12 @@ function buildCustomerPayload(row) {
   var taxDelinquent = parseBoolean(row[COL.국세체납여부]);
   var receivedDate  = parseDateSafe(row[COL.제출일시]);
 
-  // 사업자번호 + 사업자상태 → tags 배열로 저장
-  var tags = [];
+  // 사업자번호 → business_reg_no 직접 매칭
   var bizNum    = cleanString(row[COL.사업자번호]);
   var bizStatus = cleanString(row[COL.사업자상태]);
-  if (bizNum)    tags.push('사업자:' + bizNum);
+
+  // 사업자상태만 tags에 저장
+  var tags = [];
   if (bizStatus) tags.push('사업자상태:' + bizStatus);
 
   // AI 분석 결과 → consultation_memo로 합산
@@ -134,7 +139,8 @@ function buildCustomerPayload(row) {
     consultation_memo: memo,
     tags:              tags.length > 0 ? tags : null,
     received_date:     receivedDate,
-    status:            '신청예정',   // 초기 CRM 상태
+    business_reg_no:   bizNum,
+    status:            '신규',       // 초기 CRM 상태
     score:             0,
     pool:              false,
   };
@@ -166,6 +172,7 @@ function insertToSupabase(payload) {
     p_consultation_memo: payload.consultation_memo,
     p_tags:              payload.tags,
     p_received_date:     payload.received_date,
+    p_business_reg_no:   payload.business_reg_no,
   };
 
   var endpoint = url + '/rest/v1/rpc/submit_customer_form';
@@ -273,6 +280,6 @@ function buildMemo(org, amount, analysis) {
 // Apps Script 에디터에서 직접 실행하여 마지막 행으로 테스트
 function testManual() {
   Logger.log('=== 수동 테스트 시작 (마지막 행) ===');
-  onFormSubmit(null);
+  onSheetChange({ changeType: 'INSERT_ROW' });
   Logger.log('=== 완료. 로그를 확인하세요 ===');
 }

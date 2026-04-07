@@ -127,6 +127,10 @@ export default function Customers({ consultantFilter, profile }) {
   const [editingConsultantId, setEditingConsultantId] = useState(null)
   const [savingConsultantId, setSavingConsultantId] = useState(null)
   const consultantSelectRef = useRef(null)
+  // 상태 인라인 편집
+  const [editingStatusId, setEditingStatusId] = useState(null)
+  const [savingStatusId, setSavingStatusId] = useState(null)
+  const statusSelectRef = useRef(null)
 
   const loadData = async () => {
     setLoading(true)
@@ -154,7 +158,7 @@ export default function Customers({ consultantFilter, profile }) {
 
   useEffect(() => { loadData() }, [])
 
-  // 드롭다운 외부 클릭 시 닫기
+  // 담당자 드롭다운 외부 클릭 시 닫기
   useEffect(() => {
     if (!editingConsultantId) return
     const handleClickOutside = (e) => {
@@ -165,6 +169,18 @@ export default function Customers({ consultantFilter, profile }) {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [editingConsultantId])
+
+  // 상태 드롭다운 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!editingStatusId) return
+    const handleClickOutside = (e) => {
+      if (statusSelectRef.current && !statusSelectRef.current.contains(e.target)) {
+        setEditingStatusId(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [editingStatusId])
 
   const handleConsultantChange = async (customerId, newConsultantId, companyName) => {
     setSavingConsultantId(customerId)
@@ -199,6 +215,26 @@ export default function Customers({ consultantFilter, profile }) {
       console.error('담당자 변경 오류:', error)
     }
     setSavingConsultantId(null)
+  }
+
+  const handleStatusChange = async (customerId, newStatus) => {
+    setSavingStatusId(customerId)
+    setEditingStatusId(null)
+    const { error } = await supabase
+      .from('customers')
+      .update({ status: newStatus || null })
+      .eq('id', customerId)
+    if (!error) {
+      setCustomers(prev => prev.map(c =>
+        c.id === customerId ? { ...c, status: newStatus || null } : c
+      ))
+      if (selected?.id === customerId) {
+        setSelected(prev => ({ ...prev, status: newStatus || null }))
+      }
+    } else {
+      console.error('상태 변경 오류:', error)
+    }
+    setSavingStatusId(null)
   }
 
   const filtered = customers.filter(c => {
@@ -322,7 +358,40 @@ export default function Customers({ consultantFilter, profile }) {
                   onMouseEnter={() => setHoveredId(c.id)}
                   onMouseLeave={() => setHoveredId(null)}
                 >
-                  <td style={td}><StatusBadge status={c.status} /></td>
+                  <td
+                    style={{ ...td, cursor: 'pointer', position: 'relative' }}
+                    onClick={e => {
+                      e.stopPropagation()
+                      setEditingStatusId(c.id)
+                    }}
+                  >
+                    {savingStatusId === c.id ? (
+                      <span style={{ fontSize: 11, color: C.gold }}>저장 중...</span>
+                    ) : editingStatusId === c.id ? (
+                      <div ref={statusSelectRef} onClick={e => e.stopPropagation()}>
+                        <select
+                          autoFocus
+                          defaultValue={c.status ?? ''}
+                          onChange={e => handleStatusChange(c.id, e.target.value)}
+                          style={{
+                            padding: '4px 6px', borderRadius: 6, outline: 'none',
+                            background: C.s3, border: `1px solid ${C.gold}`,
+                            color: C.text, fontSize: 12, cursor: 'pointer',
+                          }}
+                        >
+                          <option value="">상태 없음</option>
+                          {STATUS_LIST.map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                        <StatusBadge status={c.status} />
+                        <span style={{ fontSize: 9, color: C.sub, lineHeight: 1 }}>▼</span>
+                      </span>
+                    )}
+                  </td>
                   <td
                     style={{ ...td, color: C.sub, cursor: 'pointer', position: 'relative' }}
                     onClick={e => {

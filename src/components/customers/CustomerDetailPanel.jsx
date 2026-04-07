@@ -29,13 +29,14 @@ export const STATUS_CONFIG = {
 const LEAD_SOURCE_CONFIG = {
   네이버:   { bg: '#0ea57122', color: '#0ea571', border: '#0ea57144' },
   카카오:   { bg: '#eab30822', color: '#ca8a04', border: '#eab30844' },
-  지인소개: { bg: '#1d6fe822', color: '#1d6fe8', border: '#1d6fe844' },
+  지인:     { bg: '#1d6fe822', color: '#1d6fe8', border: '#1d6fe844' },
   유튜브:   { bg: '#dc354522', color: '#dc3545', border: '#dc354544' },
-  기타:     { bg: '#6b84a822', color: '#6b84a8', border: '#6b84a844' },
 }
 
+// 드롭다운 프리셋 목록 (직접입력 포함)
+const LEAD_SOURCE_PRESETS = [...Object.keys(LEAD_SOURCE_CONFIG), '직접입력']
+
 const STATUS_LIST = Object.keys(STATUS_CONFIG)
-const LEAD_SOURCE_LIST = Object.keys(LEAD_SOURCE_CONFIG)
 
 const REGION_LIST = [
   '서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종',
@@ -115,6 +116,73 @@ function ColorSelect({ value, options, config, onChange, placeholder }) {
         <option key={opt} value={opt}>{opt}</option>
       ))}
     </select>
+  )
+}
+
+// ─── 유입경로 드롭다운 + 직접입력 혼합 필드 ──────────────────────────────────────
+function LeadSourceField({ value, onChange }) {
+  const C = useT()
+  // DB 값이 프리셋에 없으면 직접입력 모드로 시작
+  const isCustom = value && !LEAD_SOURCE_CONFIG[value]
+  const [direct, setDirect] = useState(isCustom)
+
+  useEffect(() => {
+    const custom = value && !LEAD_SOURCE_CONFIG[value]
+    setDirect(custom)
+  }, [value])
+
+  const cfg = value ? (LEAD_SOURCE_CONFIG[value] ?? {}) : {}
+  const selectVal = direct ? '직접입력' : (value ?? '')
+
+  const inputStyle = {
+    padding: '6px 10px', borderRadius: 8, border: `1px solid ${C.line}`,
+    background: C.s3, color: C.text, fontSize: 13, width: '100%',
+    outline: 'none', boxSizing: 'border-box',
+  }
+
+  const handleSelect = (e) => {
+    const v = e.target.value
+    if (v === '직접입력') {
+      setDirect(true)
+      onChange(null)
+    } else if (v === '') {
+      setDirect(false)
+      onChange(null)
+    } else {
+      setDirect(false)
+      onChange(v)
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <select
+        value={selectVal}
+        onChange={handleSelect}
+        style={{
+          ...inputStyle,
+          border: `1px solid ${value && !direct ? (cfg.border ?? C.line) : C.line}`,
+          background: value && !direct ? (cfg.bg ?? C.s3) : C.s3,
+          color: value && !direct ? (cfg.color ?? C.text) : (selectVal ? C.text : C.sub),
+          fontWeight: value && !direct ? 600 : 400,
+          cursor: 'pointer',
+        }}
+      >
+        <option value="">유입경로 선택</option>
+        {LEAD_SOURCE_PRESETS.map(opt => (
+          <option key={opt} value={opt}>{opt}</option>
+        ))}
+      </select>
+      {direct && (
+        <input
+          style={inputStyle}
+          value={value ?? ''}
+          onChange={e => onChange(e.target.value || null)}
+          placeholder="유입경로 직접 입력"
+          autoFocus
+        />
+      )}
+    </div>
   )
 }
 
@@ -221,12 +289,9 @@ function TabBasic({ data, onChange, consultants, isAdmin, canViewAuth }) {
       </FieldWrapper>
 
       <FieldWrapper label="유입경로">
-        <ColorSelect
+        <LeadSourceField
           value={data.lead_source}
-          options={LEAD_SOURCE_LIST}
-          config={LEAD_SOURCE_CONFIG}
           onChange={v => onChange('lead_source', v)}
-          placeholder="유입경로 선택"
         />
       </FieldWrapper>
 
@@ -312,13 +377,17 @@ function TabBasic({ data, onChange, consultants, isAdmin, canViewAuth }) {
         </div>
       </FieldWrapper>
 
-      <FieldWrapper label="매출">
+      <FieldWrapper label="월평균매출">
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <input
-            type="number"
+            type="text"
+            inputMode="numeric"
             style={{ ...inputStyle, flex: 1 }}
-            value={data.revenue ?? ''}
-            onChange={e => onChange('revenue', e.target.value === '' ? null : Number(e.target.value))}
+            value={data.monthly_revenue ?? ''}
+            onChange={e => {
+              const v = e.target.value.replace(/[^0-9]/g, '')
+              onChange('monthly_revenue', v === '' ? null : Number(v))
+            }}
             placeholder="0"
           />
           <span style={{ color: C.sub, fontSize: 13, whiteSpace: 'nowrap' }}>만원</span>
