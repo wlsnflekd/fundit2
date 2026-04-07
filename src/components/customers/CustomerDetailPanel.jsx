@@ -822,60 +822,6 @@ function TabAuth({ data, onChange, isAdmin, canViewAuth }) {
 }
 
 // ─── 메인 패널 컴포넌트 ───────────────────────────────────────────────────────
-// ─── 이폼사인 계약서 발송 ────────────────────────────────────────────────────
-
-async function sendEformsignContract({ company, ceo, phone, email }) {
-  const apiKey = import.meta.env.VITE_EFORMSIGN_API_KEY
-  const templateId = import.meta.env.VITE_EFORMSIGN_TEMPLATE_ID
-
-  if (!apiKey || !templateId) {
-    throw new Error('.env에 VITE_EFORMSIGN_API_KEY와 VITE_EFORMSIGN_TEMPLATE_ID를 설정해주세요.')
-  }
-
-  // HMAC-SHA256 서명 생성 (Web Crypto API)
-  const executionTime = Date.now()
-  const encoder = new TextEncoder()
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw', encoder.encode(apiKey),
-    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
-  )
-  const sigBuf = await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(String(executionTime)))
-  const signature = btoa(String.fromCharCode(...new Uint8Array(sigBuf)))
-
-  // 액세스 토큰 획득
-  const authRes = await fetch('https://api.eformsign.com/v2.0/api_auth/access_token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'eformsign_signature': signature },
-    body: JSON.stringify({ execution_time: executionTime }),
-  })
-  if (!authRes.ok) throw new Error(`이폼사인 인증 실패 (${authRes.status})`)
-  const { access_token, api_url } = await authRes.json()
-  const base = api_url ?? 'https://api.eformsign.com'
-
-  // 계약서 발송
-  const docRes = await fetch(`${base}/v2.0/document/template`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${access_token}`,
-    },
-    body: JSON.stringify({
-      template_id: templateId,
-      document_option: { title: `${company} 컨설팅 계약서` },
-      recipients: [{
-        step_idx: 1,
-        name: ceo || company,
-        id: phone || email || '',
-        authentication_type: phone ? 'phone' : 'email',
-      }],
-    }),
-  })
-  if (!docRes.ok) {
-    const err = await docRes.json().catch(() => ({}))
-    throw new Error(err.message || `계약서 발송 실패 (${docRes.status})`)
-  }
-  return await docRes.json()
-}
 
 // ─── 고객사 상세 패널 ────────────────────────────────────────────────────────
 
@@ -888,8 +834,6 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
   const [savedOk, setSavedOk] = useState(false)
   const [activeTab, setActiveTab] = useState('basic')
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
-  const [contractSending, setContractSending] = useState(false)
-  const [contractMsg, setContractMsg] = useState({ text: '', type: '' }) // type: 'ok' | 'err'
   const sensitiveLoadedRef = useRef(false)
 
   // 최신 데이터를 타이머 콜백에서 참조하기 위한 ref
@@ -940,26 +884,6 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
   const isAssignedConsultant = !isAdmin && customer?.consultant === profile?.id
   // 인증정보 탭 열람 권한: admin이거나, staff 본인이 담당하는 고객
   const canViewAuth = isAdmin || isAssignedConsultant
-
-  const handleSendContract = async () => {
-    if (!window.confirm('계약서를 발송하시겠습니까?')) return
-    setContractSending(true)
-    setContractMsg({ text: '', type: '' })
-    try {
-      await sendEformsignContract({
-        company: editData.company,
-        ceo: editData.ceo,
-        phone: editData.phone,
-        email: editData.email,
-      })
-      setContractMsg({ text: '계약서가 발송되었습니다.', type: 'ok' })
-      setTimeout(() => setContractMsg({ text: '', type: '' }), 4000)
-    } catch (e) {
-      setContractMsg({ text: e.message || '발송 중 오류가 발생했습니다.', type: 'err' })
-    } finally {
-      setContractSending(false)
-    }
-  }
 
   // 인증정보 탭 진입 시 민감 컬럼 로드 (열람 권한 있을 때만, 이미 로드됐으면 재요청 안 함)
   useEffect(() => {
@@ -1083,31 +1007,9 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
             )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-            <button
-              onClick={handleSendContract}
-              disabled={contractSending}
-              title="이폼사인 계약서 발송"
-              style={{
-                padding: '5px 12px', borderRadius: 7, border: `1px solid ${C.gold}66`,
-                background: contractSending ? C.s3 : C.gold + '22',
-                color: C.gold, fontSize: 12, fontWeight: 600,
-                cursor: contractSending ? 'not-allowed' : 'pointer',
-                opacity: contractSending ? 0.6 : 1, whiteSpace: 'nowrap',
-              }}
-            >
-              {contractSending ? '발송 중...' : '계약서 발송'}
-            </button>
             <button onClick={handleClose} style={{ background: 'none', border: 'none', color: C.sub, fontSize: 20, cursor: 'pointer', lineHeight: 1, padding: '2px 6px' }} title="닫기">✕</button>
           </div>
         </div>
-        {contractMsg.text && (
-          <div style={{
-            marginTop: 8, fontSize: 12, fontWeight: 600,
-            color: contractMsg.type === 'ok' ? C.green : C.error,
-          }}>
-            {contractMsg.type === 'ok' ? '✓ ' : '✗ '}{contractMsg.text}
-          </div>
-        )}
       </div>
 
       {/* ── 탭 네비게이션 ──────────────────────────────────────────────── */}
