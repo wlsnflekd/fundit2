@@ -408,17 +408,32 @@ export default function Customers({ consultantFilter, profile }) {
       </div>
       {/* 모바일 전용 검색 바 */}
       {isMobile && (
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="업체명·이름·연락처 검색"
-          style={{
-            display: 'block', width: '100%', boxSizing: 'border-box',
-            padding: '8px 12px', borderRadius: 8,
-            border: `1px solid ${C.line}`, background: C.s3,
-            color: C.text, fontSize: 13, outline: 'none', marginBottom: 12,
-          }}
-        />
+        <>
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="업체명·이름·연락처 검색"
+            style={{
+              display: 'block', width: '100%', boxSizing: 'border-box',
+              padding: '8px 12px', borderRadius: 8,
+              border: `1px solid ${C.line}`, background: C.s3,
+              color: C.text, fontSize: 13, outline: 'none', marginBottom: 8,
+            }}
+          />
+          {/* 상태 색상 체크박스 — 모바일에서도 표시 */}
+          <label style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            cursor: 'pointer', userSelect: 'none', marginBottom: 12,
+          }}>
+            <input
+              type="checkbox"
+              checked={colorRows}
+              onChange={e => setColorRows(e.target.checked)}
+              style={{ cursor: 'pointer', accentColor: C.gold, width: 16, height: 16 }}
+            />
+            <span style={{ fontSize: 12, color: C.sub }}>상태 색상</span>
+          </label>
+        </>
       )}
 
       {/* 모바일: 카드 리스트 / 데스크탑: 테이블 */}
