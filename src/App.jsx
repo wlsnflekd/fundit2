@@ -378,6 +378,18 @@ function NotificationBell({ profile }) {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [])
 
+  // Supabase Realtime: notifications INSERT 시 벨 즉시 갱신
+  useEffect(() => {
+    const ch = supabase
+      .channel(`bell:${profile?.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'notifications',
+        filter: `user_id=eq.${profile?.id}`,
+      }, () => loadNotifications())
+      .subscribe()
+    return () => supabase.removeChannel(ch)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // 드롭다운 외부 클릭 시 닫기
   useEffect(() => {
     if (!open) return
@@ -716,6 +728,23 @@ function MainApp({ profile, onLogout, rootTab, setRootTab }) {
 
     const timer = setTimeout(run, 2000)
     return () => clearTimeout(timer)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Supabase Realtime: 새 알림 INSERT 시 즉시 팝업 + 띵동
+  useEffect(() => {
+    if (!profile?.id) return
+    const ch = supabase
+      .channel(`popup:${profile.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'notifications',
+        filter: `user_id=eq.${profile.id}`,
+      }, (payload) => {
+        if (!payload.new.is_read) {
+          setPopupQueue(prev => [...prev, payload.new])
+        }
+      })
+      .subscribe()
+    return () => supabase.removeChannel(ch)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 앱 진입 직후 모든 lazy 컴포넌트를 백그라운드에서 미리 로드
