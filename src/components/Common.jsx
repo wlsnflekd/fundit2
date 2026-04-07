@@ -1,5 +1,5 @@
 // 공통 컴포넌트들
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useT } from '../theme.jsx';
 
 // 상태별 색상 매핑 — 반투명 배경 + 테두리 + 텍스트 트리플셋
@@ -143,3 +143,108 @@ export const Button = ({ children, onClick, variant = 'primary', disabled, style
     </button>
   );
 };
+
+// BottomSheet — 모바일 슬라이드업 패널
+// open/onClose로 제어, title 선택, children은 스크롤 가능
+// 데스크탑에서는 렌더 안 됨 (호출 측에서 isMobile 조건으로 분기)
+export const BottomSheet = ({ open, onClose, title, children }) => {
+  const C = useT()
+  const [mounted, setMounted] = useState(false)
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true)
+      // 마운트 직후 두 프레임 후 visible 전환 → CSS 트랜지션이 initial → final 상태를 구분
+      const raf1 = requestAnimationFrame(() => {
+        requestAnimationFrame(() => setVisible(true))
+      })
+      return () => cancelAnimationFrame(raf1)
+    } else {
+      setVisible(false)
+      const t = setTimeout(() => setMounted(false), 300)
+      return () => clearTimeout(t)
+    }
+  }, [open])
+
+  // body 스크롤 잠금 — iOS에서 시트 뒤 페이지가 스크롤되는 현상 방지
+  useEffect(() => {
+    if (open) {
+      document.body.classList.add('modal-open')
+    } else {
+      document.body.classList.remove('modal-open')
+    }
+    return () => document.body.classList.remove('modal-open')
+  }, [open])
+
+  if (!mounted) return null
+
+  return (
+    <>
+      {/* 배경 오버레이 */}
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed', inset: 0,
+          background: 'rgba(3,6,13,0.6)',
+          zIndex: 300,
+          opacity: visible ? 1 : 0,
+          transition: 'opacity 0.25s ease',
+        }}
+      />
+      {/* 시트 본체 */}
+      <div
+        style={{
+          position: 'fixed', left: 0, right: 0, bottom: 0,
+          // iOS 홈 인디케이터 safe area 대응 (viewport-fit=cover 필요)
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+          background: C.s2,
+          borderRadius: '20px 20px 0 0',
+          borderTop: `1px solid ${C.line}`,
+          zIndex: 301,
+          maxHeight: '85dvh',
+          display: 'flex',
+          flexDirection: 'column',
+          // transform 기반 슬라이드업 — right/bottom 변경보다 GPU 처리
+          transform: visible ? 'translateY(0)' : 'translateY(100%)',
+          transition: 'transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)',
+          willChange: 'transform',
+          boxShadow: '0 -8px 40px rgba(0,0,0,0.4)',
+        }}
+      >
+        {/* 드래그 핸들 */}
+        <div style={{
+          width: 36, height: 4, borderRadius: 2,
+          background: C.line, margin: '12px auto 0', flexShrink: 0,
+        }} />
+        {/* 헤더 */}
+        {title && (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '12px 20px 10px', flexShrink: 0,
+            borderBottom: `1px solid ${C.line}`,
+          }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{title}</span>
+            <button
+              onClick={onClose}
+              style={{
+                background: 'none', border: 'none', color: C.sub,
+                fontSize: 18, cursor: 'pointer',
+                minWidth: 44, minHeight: 44,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >✕</button>
+          </div>
+        )}
+        {/* 스크롤 콘텐츠 */}
+        <div style={{
+          flex: 1, overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch',
+          overscrollBehavior: 'contain',
+        }}>
+          {children}
+        </div>
+      </div>
+    </>
+  )
+}

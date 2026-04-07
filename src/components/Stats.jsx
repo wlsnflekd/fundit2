@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useT } from '../theme.jsx'
+import { useT, useIsMobile } from '../theme.jsx'
 import { getStatsData, getConsultantStats } from '../supabase.js'
 
 const STATUS_COLOR = {
@@ -13,6 +13,7 @@ const STATUS_COLOR = {
 
 export default function Stats() {
   const C = useT()
+  const isMobile = useIsMobile()
   const [stats, setStats] = useState(null)
   const [consultantStats, setConsultantStats] = useState([])
   const [loading, setLoading] = useState(true)
@@ -67,7 +68,11 @@ export default function Stats() {
       <h3 style={{ marginBottom: 16, color: C.text }}>전체 통계</h3>
 
       {/* KPI 카드 */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+      <div style={{
+        display: isMobile ? 'grid' : 'flex',
+        gridTemplateColumns: isMobile ? '1fr 1fr' : undefined,
+        gap: 12, marginBottom: 16, flexWrap: 'wrap',
+      }}>
         {[
           { label: '총 신청건', value: totalApps + '건', color: C.text },
           { label: '승인 완료', value: approvedCount + '건', color: C.green },
@@ -75,7 +80,7 @@ export default function Stats() {
           { label: '총 지원금액', value: totalAmount >= 1 ? `${totalAmount.toFixed(1)}억` : `${(totalAmount * 10000).toLocaleString()}만`, color: C.blue },
           { label: '관리 고객사', value: totalCustomers + '개사', color: C.text },
         ].map(k => (
-          <div key={k.label} style={{ background: C.s2, border: `1px solid ${C.line}`, borderRadius: 12, padding: '12px 20px', minWidth: 120, flex: 1 }}>
+          <div key={k.label} style={{ background: C.s2, border: `1px solid ${C.line}`, borderRadius: 12, padding: '12px 20px', minWidth: isMobile ? 0 : 120, flex: isMobile ? undefined : 1 }}>
             <div style={{ fontSize: 12, color: C.sub, marginBottom: 4 }}>{k.label}</div>
             <div style={{ fontSize: 24, fontWeight: 700, color: k.color }}>{k.value}</div>
           </div>
@@ -91,17 +96,19 @@ export default function Stats() {
           </div>
         ) : (
           <>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', height: 120 }}>
+            <div style={{ overflowX: isMobile ? 'auto' : undefined, WebkitOverflowScrolling: 'touch' }}>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', height: isMobile ? 80 : 120, minWidth: isMobile ? 320 : undefined }}>
               {monthlyData.map(d => (
                 <div key={d.month} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                  <div style={{ width: '100%', display: 'flex', gap: 3, alignItems: 'flex-end', height: 90 }}>
-                    <div style={{ flex: 1, background: C.blue + '99', borderRadius: '3px 3px 0 0', height: `${(d.applied / maxApps) * 80}px`, minHeight: d.applied > 0 ? 4 : 0 }} title={`신청 ${d.applied}건`} />
-                    <div style={{ flex: 1, background: C.green, borderRadius: '3px 3px 0 0', height: `${(d.approved / maxApps) * 80}px`, minHeight: d.approved > 0 ? 4 : 0 }} title={`승인 ${d.approved}건`} />
+                  <div style={{ width: '100%', display: 'flex', gap: 3, alignItems: 'flex-end', height: isMobile ? 54 : 90 }}>
+                    <div style={{ flex: 1, background: C.blue + '99', borderRadius: '3px 3px 0 0', height: `${(d.applied / maxApps) * (isMobile ? 48 : 80)}px`, minHeight: d.applied > 0 ? 4 : 0 }} title={`신청 ${d.applied}건`} />
+                    <div style={{ flex: 1, background: C.green, borderRadius: '3px 3px 0 0', height: `${(d.approved / maxApps) * (isMobile ? 48 : 80)}px`, minHeight: d.approved > 0 ? 4 : 0 }} title={`승인 ${d.approved}건`} />
                   </div>
                   <div style={{ fontSize: 11, color: C.sub }}>{d.month}</div>
                 </div>
               ))}
             </div>
+          </div>
             <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: C.sub }}>
                 <div style={{ width: 10, height: 10, background: C.blue + '99', borderRadius: 2 }} /> 신청
@@ -114,13 +121,14 @@ export default function Stats() {
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: 16 }}>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 16 }}>
         {/* 담당자별 성과 */}
         <div style={{ ...section, flex: 1, marginBottom: 0 }}>
           <div style={sectionTitle}>담당자별 성과</div>
           {consultantStats.length === 0 ? (
             <div style={{ textAlign: 'center', color: C.sub, fontSize: 13, padding: '16px 0' }}>담당자 데이터가 없습니다.</div>
           ) : (
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
@@ -143,11 +151,12 @@ export default function Stats() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
 
         {/* 신청건 상태 분포 */}
-        <div style={{ ...section, width: 200, marginBottom: 0, flexShrink: 0 }}>
+        <div style={{ ...section, width: isMobile ? undefined : 200, marginBottom: 0, flexShrink: isMobile ? undefined : 0 }}>
           <div style={sectionTitle}>신청건 상태</div>
           {statusEntries.length === 0 ? (
             <div style={{ textAlign: 'center', color: C.sub, fontSize: 13, padding: '16px 0' }}>데이터 없음</div>

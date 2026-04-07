@@ -28,11 +28,14 @@ html, body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* iOS 고무줄 스크롤 억제 — 패널/사이드바와 body가 같이 스크롤되는 현상 방지 */
+  overscroll-behavior: none;
 }
 
 #root {
   width: 100%;
   min-height: 100vh;
+  min-height: 100dvh;
   text-align: left;
   display: flex;
   flex-direction: column;
@@ -46,27 +49,73 @@ h1, h2, h3, .brand {
 button {
   font-family: 'Noto Sans KR', sans-serif;
   cursor: pointer;
+  /* 300ms tap delay 제거 + 더블탭 줌 방지 */
+  touch-action: manipulation;
 }
 
 input, textarea, select {
   font-family: 'Noto Sans KR', sans-serif;
+  /* iOS 기본 스타일 제거 */
+  -webkit-appearance: none;
+  appearance: none;
 }
 
+/* ── 모바일 터치 최적화 ─────────────────────────────────────────────────── */
+
+/* iOS 탭 하이라이트 완전 제거 */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 모바일 입력 자동 줌 방지 (iOS: font-size < 16px 시 자동 줌 발생) */
+@media (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* 패널/모달 열림 시 body 스크롤 잠금 (BottomSheet가 modal-open 클래스 추가) */
+body.modal-open {
+  overflow: hidden;
+  touch-action: none;
+}
+
+/* ── 스크롤바 — CSS 변수 연동 (라이트/다크 모드 대응) ──────────────────── */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #070d1a;
+  background: var(--s1);
 }
 ::-webkit-scrollbar-thumb {
-  background: #1c2b44;
+  background: var(--line);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #2a3f5f;
+  background: var(--sub);
 }
 
+/* 모바일에서 스크롤바 숨김 (터치 디바이스에서 시각적으로 불필요) */
+@media (max-width: 768px) {
+  ::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+}
+
+/* ── BottomSheet 애니메이션 ─────────────────────────────────────────────── */
+@keyframes bs-slide-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@keyframes bs-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── 공용 ───────────────────────────────────────────────────────────────── */
 @keyframes spin {
   to { transform: rotate(360deg); }
 }

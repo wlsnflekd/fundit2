@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState, useMemo, Component } from 'react'
-import { ThemeProvider, useT } from './theme.jsx'
+import { ThemeProvider, useT, useIsMobile } from './theme.jsx'
+import BottomTabBar from './components/BottomTabBar.jsx'
 import { supabase, getProfile, signUp, joinWorkspace, translateError, clearMustChangePassword, getNotifications, markNotificationRead, markAllNotificationsRead } from './supabase.js'
 
 // lazy 컴포넌트 렌더링 에러를 잡아 검은 화면 대신 안내 UI를 표시
@@ -452,14 +453,15 @@ function NotificationBell({ profile }) {
         )}
       </button>
 
-      {/* 드롭다운 */}
+      {/* 드롭다운 — 모바일에서 right: 0 고정으로 화면 밖 이탈 방지 */}
       {open && (
         <div style={{
-          position: 'absolute', top: '100%', right: 0, marginTop: 8,
-          width: 320, maxHeight: 420, overflowY: 'auto',
+          position: 'fixed', top: 56, right: 8,
+          width: 'min(320px, calc(100vw - 16px))', maxHeight: '60dvh', overflowY: 'auto',
           background: C.s2, border: `1px solid ${C.line}`,
           borderRadius: 14, zIndex: 500,
           boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+          WebkitOverflowScrolling: 'touch',
         }}>
           {/* 드롭다운 헤더 */}
           <div style={{
@@ -676,6 +678,7 @@ function PageLoadingFallback() {
 
 function MainApp({ profile, onLogout, rootTab, setRootTab }) {
   const C = useT()
+  const isMobile = useIsMobile()
   const [hoveredTab, setHoveredTab] = useState(null)
   const [mustChange, setMustChange] = useState(profile.must_change_password === true)
 
@@ -854,7 +857,7 @@ function MainApp({ profile, onLogout, rootTab, setRootTab }) {
   }
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: C.s1, color: C.text }}>
+    <div style={{ display: 'flex', minHeight: '100dvh', background: C.s1, color: C.text }}>
 
       {/* 비밀번호 강제 변경 오버레이 */}
       {mustChange && (
@@ -869,8 +872,8 @@ function MainApp({ profile, onLogout, rootTab, setRootTab }) {
         <NotificationPopup queue={popupQueue} onRead={handlePopupRead} />
       )}
 
-      {/* 사이드바 */}
-      <aside style={{
+      {/* 사이드바 — 데스크탑 전용 */}
+      {!isMobile && <aside style={{
         width: 240, flexShrink: 0,
         background: C.s2,
         borderRight: `1px solid ${C.line}`,
@@ -959,30 +962,49 @@ function MainApp({ profile, onLogout, rootTab, setRootTab }) {
             로그아웃
           </button>
         </div>
-      </aside>
+      </aside>}
 
       {/* 메인 컨텐츠 */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{
+        flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        // 모바일: 하단 탭바(56px) + safe area만큼 패딩 확보
+        paddingBottom: isMobile ? 'calc(56px + env(safe-area-inset-bottom, 0px))' : 0,
+      }}>
 
         {/* 상단 헤더바 */}
         <div style={{
-          padding: '16px 28px',
+          padding: isMobile ? '12px 16px' : '16px 28px',
           borderBottom: `1px solid ${C.line}`,
           background: C.s2,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           flexShrink: 0,
         }}>
-          <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 20, letterSpacing: '0.08em', color: C.text }}>
-            {currentTab?.label ?? ''}
-          </div>
+          {isMobile ? (
+            /* 모바일 헤더: FUNDIT 로고 + 알림벨 */
+            <div style={{
+              fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, letterSpacing: '0.1em',
+              background: 'linear-gradient(135deg, #f0b840, #d4952a)',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+            }}>FUNDIT</div>
+          ) : (
+            <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 20, letterSpacing: '0.08em', color: C.text }}>
+              {currentTab?.label ?? ''}
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <NotificationBell profile={profile} />
-            <div style={{ fontSize: 12, color: C.sub }}>{dateLabel}</div>
+            {!isMobile && <div style={{ fontSize: 12, color: C.sub }}>{dateLabel}</div>}
           </div>
         </div>
 
         {/* 페이지 컨텐츠 */}
-        <main style={{ flex: 1, padding: '24px 28px', overflowY: 'auto', background: C.s1 }}>
+        <main style={{
+          flex: 1,
+          padding: isMobile ? '16px 16px' : '24px 28px',
+          overflowY: 'auto',
+          background: C.s1,
+          WebkitOverflowScrolling: 'touch',
+        }}>
           <PageErrorBoundary>
             <Suspense fallback={<PageLoadingFallback />}>
               {page}
@@ -990,6 +1012,15 @@ function MainApp({ profile, onLogout, rootTab, setRootTab }) {
           </PageErrorBoundary>
         </main>
       </div>
+
+      {/* 하단 탭바 — 모바일 전용 */}
+      {isMobile && (
+        <BottomTabBar
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          role={profile.role}
+        />
+      )}
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useT } from '../theme.jsx'
+import { useT, useIsMobile } from '../theme.jsx'
+import { BottomSheet } from './Common.jsx'
 import { getSchedules, createSchedule, updateSchedule, deleteSchedule, getCustomers, getWorkspaceMembers } from '../supabase.js'
 
 const TYPE_COLOR = {
@@ -22,6 +23,7 @@ function todayStr() {
 // 일정 등록 패널
 function CreateSchedulePanel({ onClose, onCreated, profile }) {
   const C = useT()
+  const isMobile = useIsMobile()
   const [customers, setCustomers] = useState([])
   const [form, setForm] = useState({
     title: '',
@@ -66,6 +68,60 @@ function CreateSchedulePanel({ onClose, onCreated, profile }) {
   }
   const labelStyle = { fontSize: 12, color: C.sub, marginBottom: 4, display: 'block' }
 
+  // 폼 본문 — BottomSheet와 데스크탑 패널 양쪽에서 재사용
+  const formBody = (
+    <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div>
+        <label style={labelStyle}>제목 *</label>
+        <input value={form.title} onChange={e => set('title', e.target.value)} placeholder="일정 제목 입력" style={inputStyle} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div>
+          <label style={labelStyle}>유형</label>
+          <select value={form.type} onChange={e => set('type', e.target.value)} style={inputStyle}>
+            {SCHEDULE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={labelStyle}>날짜 *</label>
+          <input type="date" value={form.date} onChange={e => set('date', e.target.value)} style={inputStyle} />
+        </div>
+      </div>
+      <div>
+        <label style={labelStyle}>관련 고객사</label>
+        <select value={form.customer_id} onChange={e => set('customer_id', e.target.value)} style={inputStyle}>
+          <option value="">고객사 없음</option>
+          {customers.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}
+        </select>
+      </div>
+      <div>
+        <label style={labelStyle}>메모</label>
+        <textarea value={form.memo} onChange={e => set('memo', e.target.value)} rows={3} placeholder="메모를 입력하세요" style={{ ...inputStyle, resize: 'vertical' }} />
+      </div>
+      {err && <div style={{ fontSize: 12, color: '#dc3545' }}>{err}</div>}
+      <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          style={{
+            flex: 1, padding: '10px', borderRadius: 8, border: 'none', cursor: saving ? 'not-allowed' : 'pointer',
+            background: 'linear-gradient(135deg, #f0b840, #d4952a)', color: '#03060d', fontWeight: 700, fontSize: 13,
+            opacity: saving ? 0.7 : 1, minHeight: isMobile ? 44 : undefined,
+          }}
+        >{saving ? '저장 중...' : '추가하기'}</button>
+        <button onClick={onClose} style={{ padding: '10px 16px', borderRadius: 8, border: `1px solid ${C.line}`, background: 'transparent', color: C.sub, fontSize: 13, cursor: 'pointer', minHeight: isMobile ? 44 : undefined }}>취소</button>
+      </div>
+    </div>
+  )
+
+  if (isMobile) {
+    return (
+      <BottomSheet open onClose={onClose} title="일정 추가">
+        {formBody}
+      </BottomSheet>
+    )
+  }
+
   return (
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(3,6,13,0.6)', zIndex: 100 }} />
@@ -82,48 +138,7 @@ function CreateSchedulePanel({ onClose, onCreated, profile }) {
           <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>일정 추가</div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.sub, fontSize: 20, cursor: 'pointer', padding: 4 }}>✕</button>
         </div>
-        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <label style={labelStyle}>제목 *</label>
-            <input value={form.title} onChange={e => set('title', e.target.value)} placeholder="일정 제목 입력" style={inputStyle} />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div>
-              <label style={labelStyle}>유형</label>
-              <select value={form.type} onChange={e => set('type', e.target.value)} style={inputStyle}>
-                {SCHEDULE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>날짜 *</label>
-              <input type="date" value={form.date} onChange={e => set('date', e.target.value)} style={inputStyle} />
-            </div>
-          </div>
-          <div>
-            <label style={labelStyle}>관련 고객사</label>
-            <select value={form.customer_id} onChange={e => set('customer_id', e.target.value)} style={inputStyle}>
-              <option value="">고객사 없음</option>
-              {customers.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={labelStyle}>메모</label>
-            <textarea value={form.memo} onChange={e => set('memo', e.target.value)} rows={3} placeholder="메모를 입력하세요" style={{ ...inputStyle, resize: 'vertical' }} />
-          </div>
-          {err && <div style={{ fontSize: 12, color: '#dc3545' }}>{err}</div>}
-          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              style={{
-                flex: 1, padding: '10px', borderRadius: 8, border: 'none', cursor: saving ? 'not-allowed' : 'pointer',
-                background: 'linear-gradient(135deg, #f0b840, #d4952a)', color: '#03060d', fontWeight: 700, fontSize: 13,
-                opacity: saving ? 0.7 : 1,
-              }}
-            >{saving ? '저장 중...' : '추가하기'}</button>
-            <button onClick={onClose} style={{ padding: '10px 16px', borderRadius: 8, border: `1px solid ${C.line}`, background: 'transparent', color: C.sub, fontSize: 13, cursor: 'pointer' }}>취소</button>
-          </div>
-        </div>
+        {formBody}
       </div>
     </>
   )
@@ -132,6 +147,7 @@ function CreateSchedulePanel({ onClose, onCreated, profile }) {
 // 일정 수정 패널
 function EditSchedulePanel({ schedule, onClose, onUpdated }) {
   const C = useT()
+  const isMobile = useIsMobile()
   const [customers, setCustomers] = useState([])
   const [form, setForm] = useState({
     title: schedule.title ?? '',
@@ -174,6 +190,60 @@ function EditSchedulePanel({ schedule, onClose, onUpdated }) {
   }
   const labelStyle = { fontSize: 12, color: C.sub, marginBottom: 4, display: 'block' }
 
+  // 폼 본문 — BottomSheet와 데스크탑 패널 양쪽에서 재사용
+  const formBody = (
+    <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div>
+        <label style={labelStyle}>제목 *</label>
+        <input value={form.title} onChange={e => set('title', e.target.value)} placeholder="일정 제목 입력" style={inputStyle} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div>
+          <label style={labelStyle}>유형</label>
+          <select value={form.type} onChange={e => set('type', e.target.value)} style={inputStyle}>
+            {SCHEDULE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={labelStyle}>날짜 *</label>
+          <input type="date" value={form.date} onChange={e => set('date', e.target.value)} style={inputStyle} />
+        </div>
+      </div>
+      <div>
+        <label style={labelStyle}>관련 고객사</label>
+        <select value={form.customer_id} onChange={e => set('customer_id', e.target.value)} style={inputStyle}>
+          <option value="">고객사 없음</option>
+          {customers.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}
+        </select>
+      </div>
+      <div>
+        <label style={labelStyle}>메모</label>
+        <textarea value={form.memo} onChange={e => set('memo', e.target.value)} rows={3} placeholder="메모를 입력하세요" style={{ ...inputStyle, resize: 'vertical' }} />
+      </div>
+      {err && <div style={{ fontSize: 12, color: '#dc3545' }}>{err}</div>}
+      <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          style={{
+            flex: 1, padding: '10px', borderRadius: 8, border: 'none', cursor: saving ? 'not-allowed' : 'pointer',
+            background: 'linear-gradient(135deg, #f0b840, #d4952a)', color: '#03060d', fontWeight: 700, fontSize: 13,
+            opacity: saving ? 0.7 : 1, minHeight: isMobile ? 44 : undefined,
+          }}
+        >{saving ? '저장 중...' : '수정 저장'}</button>
+        <button onClick={onClose} style={{ padding: '10px 16px', borderRadius: 8, border: `1px solid ${C.line}`, background: 'transparent', color: C.sub, fontSize: 13, cursor: 'pointer', minHeight: isMobile ? 44 : undefined }}>취소</button>
+      </div>
+    </div>
+  )
+
+  if (isMobile) {
+    return (
+      <BottomSheet open onClose={onClose} title="일정 수정">
+        {formBody}
+      </BottomSheet>
+    )
+  }
+
   return (
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(3,6,13,0.6)', zIndex: 100 }} />
@@ -190,48 +260,7 @@ function EditSchedulePanel({ schedule, onClose, onUpdated }) {
           <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>일정 수정</div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.sub, fontSize: 20, cursor: 'pointer', padding: 4 }}>✕</button>
         </div>
-        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <label style={labelStyle}>제목 *</label>
-            <input value={form.title} onChange={e => set('title', e.target.value)} placeholder="일정 제목 입력" style={inputStyle} />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div>
-              <label style={labelStyle}>유형</label>
-              <select value={form.type} onChange={e => set('type', e.target.value)} style={inputStyle}>
-                {SCHEDULE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>날짜 *</label>
-              <input type="date" value={form.date} onChange={e => set('date', e.target.value)} style={inputStyle} />
-            </div>
-          </div>
-          <div>
-            <label style={labelStyle}>관련 고객사</label>
-            <select value={form.customer_id} onChange={e => set('customer_id', e.target.value)} style={inputStyle}>
-              <option value="">고객사 없음</option>
-              {customers.map(c => <option key={c.id} value={c.id}>{c.company}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={labelStyle}>메모</label>
-            <textarea value={form.memo} onChange={e => set('memo', e.target.value)} rows={3} placeholder="메모를 입력하세요" style={{ ...inputStyle, resize: 'vertical' }} />
-          </div>
-          {err && <div style={{ fontSize: 12, color: '#dc3545' }}>{err}</div>}
-          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              style={{
-                flex: 1, padding: '10px', borderRadius: 8, border: 'none', cursor: saving ? 'not-allowed' : 'pointer',
-                background: 'linear-gradient(135deg, #f0b840, #d4952a)', color: '#03060d', fontWeight: 700, fontSize: 13,
-                opacity: saving ? 0.7 : 1,
-              }}
-            >{saving ? '저장 중...' : '수정 저장'}</button>
-            <button onClick={onClose} style={{ padding: '10px 16px', borderRadius: 8, border: `1px solid ${C.line}`, background: 'transparent', color: C.sub, fontSize: 13, cursor: 'pointer' }}>취소</button>
-          </div>
-        </div>
+        {formBody}
       </div>
     </>
   )
@@ -239,6 +268,7 @@ function EditSchedulePanel({ schedule, onClose, onUpdated }) {
 
 export default function Calendar({ profile }) {
   const C = useT()
+  const isMobile = useIsMobile()
   const [schedules, setSchedules] = useState([])
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -315,7 +345,7 @@ export default function Calendar({ profile }) {
     const isDeleting = deletingId === s.id
     return (
       <div style={{
-        display: 'flex', gap: 12, padding: '12px 16px',
+        display: 'flex', gap: 12, padding: isMobile ? '12px 14px' : '14px 18px',
         borderBottom: `1px solid ${C.line}`,
         opacity: isPast ? 0.55 : 1,
         alignItems: 'flex-start',
@@ -388,6 +418,7 @@ export default function Calendar({ profile }) {
                   {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                 </select>
               )}
+              {/* 모바일에서는 '전체보기' 축약 */}
               <button
                 onClick={() => { setViewAll(v => !v); setConsultantViewFilter('') }}
                 style={{
@@ -395,9 +426,12 @@ export default function Calendar({ profile }) {
                   border: `1px solid ${viewAll ? C.gold : C.line}`,
                   background: viewAll ? C.gold + '22' : 'transparent',
                   color: viewAll ? C.gold : C.sub,
+                  minHeight: isMobile ? 44 : undefined,
                 }}
               >
-                {viewAll ? '내 일정 보기' : '워크스페이스 전체보기'}
+                {isMobile
+                  ? (viewAll ? '내 일정' : '전체보기')
+                  : (viewAll ? '내 일정 보기' : '워크스페이스 전체보기')}
               </button>
             </>
           )}
@@ -406,15 +440,18 @@ export default function Calendar({ profile }) {
             style={{
               padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
               background: 'linear-gradient(135deg, #f0b840, #d4952a)', color: '#03060d', fontWeight: 700, fontSize: 13,
+              minHeight: isMobile ? 44 : undefined,
             }}
           >+ 일정 추가</button>
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+      {/* 필터 바: 모바일에서 가로 스크롤 */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: isMobile ? 'nowrap' : 'wrap', overflowX: isMobile ? 'auto' : undefined, WebkitOverflowScrolling: 'touch', paddingBottom: isMobile ? 2 : 0 }}>
         {types.map(t => (
           <button key={t} onClick={() => setSelectedType(t)} style={{
             padding: '4px 12px', borderRadius: 999, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+            flexShrink: 0,
             background: selectedType === t ? (TYPE_COLOR[t] || C.gold) : C.s3,
             color: selectedType === t ? '#fff' : C.sub,
           }}>{t}</button>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useT } from '../theme.jsx'
+import { useT, useIsMobile } from '../theme.jsx'
 import { StatusBadge } from './Common.jsx'
 import { getPendingConsultants, approveProfile, rejectProfile, getDashboardStats, getNotifications } from '../supabase.js'
 
@@ -143,6 +143,7 @@ function PendingConsultantsSection() {
 // ── 4번째 KPI 카드: role별 알림 카드 ─────────────────────────────────────────
 function AlertCard({ C, profile, unassignedCount, notifications, loading, onNavigate, hoveredCard, setHoveredCard }) {
   const isConsultant = profile?.role === 'consultant'
+  const isMobile = useIsMobile()
   const [showPanel, setShowPanel] = useState(false)
 
   const accent = '#e74c3c'
@@ -153,7 +154,7 @@ function AlertCard({ C, profile, unassignedCount, notifications, loading, onNavi
     background: `linear-gradient(135deg, ${C.s2}, ${C.s3})`,
     border: hovered ? `1px solid ${accent}88` : `1px solid ${C.line}`,
     borderRadius: 16, padding: '20px 24px',
-    flex: 1, minWidth: 160, cursor: 'pointer',
+    flex: 1, minWidth: isMobile ? 0 : 160, cursor: 'pointer',
     transition: 'border-color 0.15s, box-shadow 0.15s',
     boxShadow: hovered ? `0 4px 20px ${accent}22` : 'none',
   }
@@ -172,7 +173,7 @@ function AlertCard({ C, profile, unassignedCount, notifications, loading, onNavi
     const totalUnread = unread.length
 
     return (
-      <div style={{ position: 'relative', flex: 1, minWidth: 160 }}>
+      <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
         <div
           onClick={() => setShowPanel(p => !p)}
           onMouseEnter={() => setHoveredCard(cardKey)}
@@ -301,7 +302,8 @@ function RecentCustomersSection({ C, loading, recentCustomers, onNavigate, isCon
       ) : recentCustomers.length === 0 ? (
         <div style={{ padding: '32px 20px', textAlign: 'center', color: C.sub, fontSize: 13 }}>{emptyMsg}</div>
       ) : (
-        recentCustomers.map((c, i) => (
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        {recentCustomers.map((c, i) => (
           <div
             key={c.id}
             onMouseEnter={e => { e.currentTarget.style.background = C.s3 }}
@@ -321,7 +323,8 @@ function RecentCustomersSection({ C, loading, recentCustomers, onNavigate, isCon
               </span>
             </div>
           </div>
-        ))
+        ))}
+        </div>
       )}
     </div>
   )
@@ -329,6 +332,7 @@ function RecentCustomersSection({ C, loading, recentCustomers, onNavigate, isCon
 
 export default function Dashboard({ profile, onNavigate }) {
   const C = useT()
+  const isMobile = useIsMobile()
   const [stats, setStats] = useState({ customers: 0, applications: 0, inProgress: 0 })
   const [recentCustomers, setRecentCustomers] = useState([])
   const [statusSummary, setStatusSummary] = useState([])
@@ -372,7 +376,13 @@ export default function Dashboard({ profile, onNavigate }) {
   return (
     <div style={{ fontFamily: 'Noto Sans KR, sans-serif', color: C.text }}>
       {/* KPI 카드 */}
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
+      <div style={{
+        display: isMobile ? 'grid' : 'flex',
+        gridTemplateColumns: isMobile ? '1fr 1fr' : undefined,
+        gap: 12,
+        flexWrap: 'wrap',
+        marginBottom: 20,
+      }}>
         {KPI_CARDS.map(({ key, title, icon, accent, tab }) => (
           <div
             key={key}
@@ -390,7 +400,7 @@ export default function Dashboard({ profile, onNavigate }) {
               background: `linear-gradient(135deg, ${C.s2}, ${C.s3})`,
               border: hoveredCard === key ? `1px solid ${accent}88` : `1px solid ${C.line}`,
               borderRadius: 16, padding: '20px 24px',
-              flex: 1, minWidth: 160,
+              flex: 1, minWidth: isMobile ? 0 : 160,
               cursor: 'pointer',
               transition: 'border-color 0.15s, box-shadow 0.15s',
               boxShadow: hoveredCard === key ? `0 4px 20px ${accent}22` : 'none',
@@ -437,9 +447,9 @@ export default function Dashboard({ profile, onNavigate }) {
       />
 
       {/* 하단 2열 */}
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 16 }}>
         {/* 마감 임박 */}
-        <div style={{ flex: 1, minWidth: 220, background: C.s2, border: `1px solid ${C.line}`, borderRadius: 16, padding: '16px 20px' }}>
+        <div style={{ flex: 1, minWidth: isMobile ? 0 : 220, background: C.s2, border: `1px solid ${C.line}`, borderRadius: 16, padding: '16px 20px' }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 16 }}>이번달 마감 임박</div>
           {urgentItems.length === 0 ? (
             <div style={{ fontSize: 13, color: C.sub }}>{loading ? '불러오는 중...' : '마감 임박 건이 없어요'}</div>
@@ -454,7 +464,7 @@ export default function Dashboard({ profile, onNavigate }) {
         </div>
 
         {/* 신청 현황 요약 */}
-        <div style={{ flex: 1, minWidth: 220, background: C.s2, border: `1px solid ${C.line}`, borderRadius: 16, padding: '16px 20px' }}>
+        <div style={{ flex: 1, minWidth: isMobile ? 0 : 220, background: C.s2, border: `1px solid ${C.line}`, borderRadius: 16, padding: '16px 20px' }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 16 }}>신청 현황 요약</div>
           {loading ? (
             <div style={{ fontSize: 13, color: C.sub }}>불러오는 중...</div>

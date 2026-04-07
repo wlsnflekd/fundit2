@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { useT } from '../theme.jsx'
-import { Button } from './Common.jsx'
+import { useT, useIsMobile } from '../theme.jsx'
+import { Button, BottomSheet } from './Common.jsx'
 import CustomerDetailPanel, { STATUS_CONFIG } from './customers/CustomerDetailPanel.jsx'
 import { supabase, getCustomers, deleteCustomer, createCustomer, createAssignmentNotification } from '../supabase.js'
 
@@ -23,8 +23,54 @@ function StatusBadge({ status }) {
   )
 }
 
+// ─── 모바일 카드 (테이블 대체) ────────────────────────────────────────────────
+function CustomerMobileCard({ c, onSelect, C }) {
+  return (
+    <div
+      onClick={() => onSelect(c)}
+      style={{
+        background: C.s2, border: `1px solid ${C.line}`,
+        borderRadius: 12, padding: '14px 16px',
+        cursor: 'pointer', marginBottom: 8,
+      }}
+    >
+      {/* 1행: 상태 배지 + 회사명 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <StatusBadge status={c.status} />
+        <span style={{
+          fontSize: 15, fontWeight: 700, color: C.text,
+          flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>{c.company}</span>
+        {c.pool && (
+          <span style={{
+            fontSize: 10, fontWeight: 700, color: '#4d9eff',
+            border: '1px solid #1d6fe840', borderRadius: 4, padding: '1px 5px',
+          }}>POOL</span>
+        )}
+      </div>
+      {/* 2행: 대표 + 업종 + 담당자 */}
+      <div style={{ display: 'flex', gap: 12, fontSize: 12, color: C.sub, marginBottom: 4 }}>
+        <span>{c.ceo || '-'}</span>
+        <span>{c.industry || '-'}</span>
+        <span style={{ marginLeft: 'auto' }}>담당: {c.consultantName || '미배분'}</span>
+      </div>
+      {/* 3행: 태그 */}
+      {c.tags?.length > 0 && (
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+          {c.tags.slice(0, 2).map(tag => (
+            <span key={tag} style={{
+              fontSize: 10, color: C.sub,
+              background: C.s3, borderRadius: 4, padding: '1px 6px',
+            }}>{tag}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── 고객사 등록 패널 ─────────────────────────────────────────────────────────
-function CustomerRegisterPanel({ consultants, profile, onClose, onCreated }) {
+function CustomerRegisterPanel({ consultants, profile, onClose, onCreated, isMobile }) {
   const C = useT()
   const [form, setForm] = useState({
     company: '', ceo: '', industry: '', consultant: '', status: STATUS_LIST[0] ?? '신규',
@@ -61,50 +107,67 @@ function CustomerRegisterPanel({ consultants, profile, onClose, onCreated }) {
 
   const inputStyle = {
     width: '100%', padding: '9px 12px', borderRadius: 8, outline: 'none',
-    background: '#101a30', border: '1px solid #1c2b44', color: '#eaf0ff',
+    background: C.s3, border: `1px solid ${C.line}`, color: C.text,
     fontSize: 13, boxSizing: 'border-box',
   }
-  const labelStyle = { fontSize: 11, fontWeight: 700, color: '#6b84a8', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 5, display: 'block' }
+  const labelStyle = { fontSize: 11, fontWeight: 700, color: C.sub, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 5, display: 'block' }
 
+  // 폼 필드 — BottomSheet와 슬라이드 패널에서 공통 사용
+  const formFields = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div><label style={labelStyle}>업체명 *</label><input style={inputStyle} value={form.company} onChange={e => set('company', e.target.value)} placeholder="(주)그린테크" /></div>
+      <div><label style={labelStyle}>대표자 이름</label><input style={inputStyle} value={form.ceo} onChange={e => set('ceo', e.target.value)} placeholder="홍길동" /></div>
+      <div><label style={labelStyle}>업종</label><input style={inputStyle} value={form.industry} onChange={e => set('industry', e.target.value)} placeholder="제조업" /></div>
+      <div>
+        <label style={labelStyle}>담당자</label>
+        <select style={inputStyle} value={form.consultant} onChange={e => set('consultant', e.target.value)}>
+          <option value="">미배분</option>
+          {consultants.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </select>
+      </div>
+      <div>
+        <label style={labelStyle}>상태</label>
+        <select style={inputStyle} value={form.status} onChange={e => set('status', e.target.value)}>
+          {STATUS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </div>
+      {error && <div style={{ fontSize: 12, color: C.error }}>{error}</div>}
+      <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+        <button onClick={onClose} style={{ flex: 1, padding: '10px', borderRadius: 8, border: `1px solid ${C.line}`, background: 'transparent', color: C.sub, fontSize: 13, cursor: 'pointer' }}>취소</button>
+        <button onClick={handleSubmit} disabled={saving} style={{ flex: 2, padding: '10px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #f0b840, #d4952a)', color: '#03060d', fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+          {saving ? '저장 중...' : '고객사 등록'}
+        </button>
+      </div>
+    </div>
+  )
+
+  // 모바일: BottomSheet
+  if (isMobile) {
+    return (
+      <BottomSheet open onClose={onClose} title="고객사 등록">
+        <div style={{ padding: '16px 20px 20px' }}>
+          {formFields}
+        </div>
+      </BottomSheet>
+    )
+  }
+
+  // 데스크탑: 오른쪽 슬라이드 패널
   return (
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(3,6,13,0.6)', zIndex: 100 }} />
       <div style={{
         position: 'fixed', top: 0, right: 0, bottom: 0, width: 380,
-        background: '#0b1224', borderLeft: '1px solid #1c2b44',
+        background: C.s2, borderLeft: `1px solid ${C.line}`,
         zIndex: 101, display: 'flex', flexDirection: 'column',
         boxShadow: '-8px 0 40px rgba(0,0,0,0.4)',
       }}>
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid #1c2b44', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: '#eaf0ff' }}>고객사 등록</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6b84a8', fontSize: 20, cursor: 'pointer' }}>×</button>
+        <div style={{ padding: '20px 24px', borderBottom: `1px solid ${C.line}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>고객사 등록</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.sub, fontSize: 20, cursor: 'pointer' }}>×</button>
         </div>
-
-        <div style={{ padding: '20px 24px', flex: 1, display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto' }}>
-          <div><label style={labelStyle}>업체명 *</label><input style={inputStyle} value={form.company} onChange={e => set('company', e.target.value)} placeholder="(주)그린테크" /></div>
-          <div><label style={labelStyle}>대표자 이름</label><input style={inputStyle} value={form.ceo} onChange={e => set('ceo', e.target.value)} placeholder="홍길동" /></div>
-          <div><label style={labelStyle}>업종</label><input style={inputStyle} value={form.industry} onChange={e => set('industry', e.target.value)} placeholder="제조업" /></div>
-          <div>
-            <label style={labelStyle}>담당자</label>
-            <select style={inputStyle} value={form.consultant} onChange={e => set('consultant', e.target.value)}>
-              <option value="">미배분</option>
-              {consultants.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={labelStyle}>상태</label>
-            <select style={inputStyle} value={form.status} onChange={e => set('status', e.target.value)}>
-              {STATUS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-          {error && <div style={{ fontSize: 12, color: '#dc3545' }}>{error}</div>}
-        </div>
-
-        <div style={{ padding: '16px 24px', borderTop: '1px solid #1c2b44', flexShrink: 0, display: 'flex', gap: 10 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: '10px', borderRadius: 8, border: '1px solid #1c2b44', background: 'transparent', color: '#6b84a8', fontSize: 13, cursor: 'pointer' }}>취소</button>
-          <button onClick={handleSubmit} disabled={saving} style={{ flex: 2, padding: '10px', borderRadius: 8, border: 'none', background: 'linear-gradient(135deg, #f0b840, #d4952a)', color: '#03060d', fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
-            {saving ? '저장 중...' : '고객사 등록'}
-          </button>
+        <div style={{ padding: '20px 24px', flex: 1, overflowY: 'auto' }}>
+          {formFields}
         </div>
       </div>
     </>
@@ -113,6 +176,7 @@ function CustomerRegisterPanel({ consultants, profile, onClose, onCreated }) {
 
 export default function Customers({ consultantFilter, profile }) {
   const C = useT()
+  const isMobile = useIsMobile()
   const [customers, setCustomers] = useState([])
   const [consultants, setConsultants] = useState([])
   const [loading, setLoading] = useState(true)
@@ -309,160 +373,201 @@ export default function Customers({ consultantFilter, profile }) {
       </div>
 
       {/* 상태 필터 */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+      <div style={{
+        display: 'flex',
+        flexWrap: isMobile ? 'nowrap' : 'wrap',
+        overflowX: isMobile ? 'auto' : undefined,
+        WebkitOverflowScrolling: 'touch',
+        gap: 6, marginBottom: isMobile ? 10 : 14,
+        paddingBottom: isMobile ? 4 : 0,
+      }}>
         {STATUS_FILTERS.map(s => (
           <button key={s} onClick={() => setFilter(s)} style={{
             padding: '3px 10px', borderRadius: 999, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700,
+            flexShrink: 0,
             background: filter === s ? C.gold : C.s3,
             color: filter === s ? C.base : C.sub,
           }}>{s}</button>
         ))}
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', userSelect: 'none' }}>
-            <input
-              type="checkbox"
-              checked={colorRows}
-              onChange={e => setColorRows(e.target.checked)}
-              style={{ cursor: 'pointer', accentColor: C.gold, width: 14, height: 14 }}
-            />
-            <span style={{ fontSize: 11, color: C.sub, whiteSpace: 'nowrap' }}>상태 색상</span>
-          </label>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="업체명·이름·연락처 검색"
-            style={{ padding: '4px 12px', borderRadius: 8, border: `1px solid ${C.line}`, background: C.s3, color: C.text, fontSize: 12, width: 180, outline: 'none' }} />
-        </div>
+        {/* 검색 + 색상 토글 — 모바일에서는 필터 아래 별도 행으로 */}
+        {!isMobile && (
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', userSelect: 'none' }}>
+              <input
+                type="checkbox"
+                checked={colorRows}
+                onChange={e => setColorRows(e.target.checked)}
+                style={{ cursor: 'pointer', accentColor: C.gold, width: 14, height: 14 }}
+              />
+              <span style={{ fontSize: 11, color: C.sub, whiteSpace: 'nowrap' }}>상태 색상</span>
+            </label>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="업체명·이름·연락처 검색"
+              style={{ padding: '4px 12px', borderRadius: 8, border: `1px solid ${C.line}`, background: C.s3, color: C.text, fontSize: 12, width: 180, outline: 'none' }} />
+          </div>
+        )}
       </div>
+      {/* 모바일 전용 검색 바 */}
+      {isMobile && (
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="업체명·이름·연락처 검색"
+          style={{
+            display: 'block', width: '100%', boxSizing: 'border-box',
+            padding: '8px 12px', borderRadius: 8,
+            border: `1px solid ${C.line}`, background: C.s3,
+            color: C.text, fontSize: 13, outline: 'none', marginBottom: 12,
+          }}
+        />
+      )}
 
-      <div style={{ background: C.s2, border: `1px solid ${C.line}`, borderRadius: 14, overflow: 'auto' }}>
-        {loading ? (
-          <div style={{ padding: 32, textAlign: 'center', color: C.sub }}>불러오는 중...</div>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: C.s1 }}>
-                <th style={th}>상태</th>
-                <th style={th}>담당자</th>
-                <th style={th}>업체명</th>
-                <th style={th}>이름</th>
-                <th style={th}>연락처</th>
-                <th style={th}>업종</th>
-                <th style={th}>접수일</th>
-                {isAdmin && <th style={{ ...th, width: 36, textAlign: 'center' }}></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(c => (
-                <tr
-                  key={c.id}
-                  style={{ cursor: 'pointer', background: getRowBg(c), transition: 'background 0.1s' }}
-                  onClick={() => setSelected(c)}
-                  onMouseEnter={() => setHoveredId(c.id)}
-                  onMouseLeave={() => setHoveredId(null)}
-                >
-                  <td
-                    style={{ ...td, cursor: 'pointer', position: 'relative' }}
-                    onClick={e => {
-                      e.stopPropagation()
-                      setEditingStatusId(c.id)
-                    }}
-                  >
-                    {savingStatusId === c.id ? (
-                      <span style={{ fontSize: 11, color: C.gold }}>저장 중...</span>
-                    ) : editingStatusId === c.id ? (
-                      <div ref={statusSelectRef} onClick={e => e.stopPropagation()}>
-                        <select
-                          autoFocus
-                          defaultValue={c.status ?? ''}
-                          onChange={e => handleStatusChange(c.id, e.target.value)}
-                          style={{
-                            padding: '4px 6px', borderRadius: 6, outline: 'none',
-                            background: C.s3, border: `1px solid ${C.gold}`,
-                            color: C.text, fontSize: 12, cursor: 'pointer',
-                          }}
-                        >
-                          <option value="">상태 없음</option>
-                          {STATUS_LIST.map(s => (
-                            <option key={s} value={s}>{s}</option>
-                          ))}
-                        </select>
-                      </div>
-                    ) : (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                        <StatusBadge status={c.status} />
-                        <span style={{ fontSize: 9, color: C.sub, lineHeight: 1 }}>▼</span>
-                      </span>
-                    )}
-                  </td>
-                  <td
-                    style={{ ...td, color: C.sub, cursor: 'pointer', position: 'relative' }}
-                    onClick={e => {
-                      e.stopPropagation()
-                      setEditingConsultantId(c.id)
-                    }}
-                  >
-                    {savingConsultantId === c.id ? (
-                      <span style={{ fontSize: 11, color: C.gold }}>저장 중...</span>
-                    ) : editingConsultantId === c.id ? (
-                      <div ref={consultantSelectRef} onClick={e => e.stopPropagation()}>
-                        <select
-                          autoFocus
-                          defaultValue={c.consultant ?? ''}
-                          onChange={e => handleConsultantChange(c.id, e.target.value, c.company)}
-                          style={{
-                            padding: '4px 6px', borderRadius: 6, outline: 'none',
-                            background: C.s3, border: `1px solid ${C.gold}`,
-                            color: C.text, fontSize: 12, cursor: 'pointer',
-                          }}
-                        >
-                          <option value="">미배분</option>
-                          {consultants.map(m => (
-                            <option key={m.id} value={m.id}>{m.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    ) : (
-                      <span style={{ borderBottom: `1px dashed ${C.line}`, paddingBottom: 1 }}>
-                        {c.consultantName}
-                      </span>
-                    )}
-                  </td>
-                  <td style={td}>
-                    <span style={{ fontWeight: 600 }}>{c.company}</span>
-                    {c.pool && <span style={{ marginLeft: 6, fontSize: 10, padding: '1px 6px', borderRadius: 999, background: C.blue, color: C.base }}>풀</span>}
-                  </td>
-                  <td style={td}>{c.ceo || '-'}</td>
-                  <td style={{ ...td, color: C.sub }}>{c.phone || '-'}</td>
-                  <td style={{ ...td, color: C.sub }}>{c.industry || '-'}</td>
-                  <td style={{ ...td, color: C.sub }}>{c.received_date || '-'}</td>
-                  {isAdmin && (
-                    <td style={{ ...td, textAlign: 'center', padding: '10px 8px' }} onClick={e => e.stopPropagation()}>
-                      <button
-                        onClick={e => handleDelete(e, c)}
-                        title="고객사 삭제"
-                        style={{
-                          background: 'none', border: 'none', cursor: 'pointer',
-                          color: '#dc3545', fontSize: 17, padding: '2px 6px', borderRadius: 4,
-                          lineHeight: 1, transition: 'opacity 0.15s',
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.opacity = '0.7' }}
-                        onMouseLeave={e => { e.currentTarget.style.opacity = '1' }}
-                      >🗑</button>
-                    </td>
-                  )}
+      {/* 모바일: 카드 리스트 / 데스크탑: 테이블 */}
+      {isMobile ? (
+        <div>
+          {loading ? (
+            <div style={{ padding: 32, textAlign: 'center', color: C.sub }}>불러오는 중...</div>
+          ) : filtered.length === 0 ? (
+            <div style={{ padding: 32, textAlign: 'center', color: C.sub }}>검색 결과가 없습니다.</div>
+          ) : (
+            filtered.map(c => (
+              <CustomerMobileCard key={c.id} c={c} onSelect={setSelected} C={C} />
+            ))
+          )}
+        </div>
+      ) : (
+        <div style={{ background: C.s2, border: `1px solid ${C.line}`, borderRadius: 14, overflow: 'auto' }}>
+          {loading ? (
+            <div style={{ padding: 32, textAlign: 'center', color: C.sub }}>불러오는 중...</div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: C.s1 }}>
+                  <th style={th}>상태</th>
+                  <th style={th}>담당자</th>
+                  <th style={th}>업체명</th>
+                  <th style={th}>이름</th>
+                  <th style={th}>연락처</th>
+                  <th style={th}>업종</th>
+                  <th style={th}>접수일</th>
+                  {isAdmin && <th style={{ ...th, width: 36, textAlign: 'center' }}></th>}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        {!loading && filtered.length === 0 && (
-          <div style={{ padding: 32, textAlign: 'center', color: C.sub }}>검색 결과가 없습니다.</div>
-        )}
-      </div>
+              </thead>
+              <tbody>
+                {filtered.map(c => (
+                  <tr
+                    key={c.id}
+                    style={{ cursor: 'pointer', background: getRowBg(c), transition: 'background 0.1s' }}
+                    onClick={() => setSelected(c)}
+                    onMouseEnter={() => setHoveredId(c.id)}
+                    onMouseLeave={() => setHoveredId(null)}
+                  >
+                    <td
+                      style={{ ...td, cursor: 'pointer', position: 'relative' }}
+                      onClick={e => {
+                        e.stopPropagation()
+                        setEditingStatusId(c.id)
+                      }}
+                    >
+                      {savingStatusId === c.id ? (
+                        <span style={{ fontSize: 11, color: C.gold }}>저장 중...</span>
+                      ) : editingStatusId === c.id ? (
+                        <div ref={statusSelectRef} onClick={e => e.stopPropagation()}>
+                          <select
+                            autoFocus
+                            defaultValue={c.status ?? ''}
+                            onChange={e => handleStatusChange(c.id, e.target.value)}
+                            style={{
+                              padding: '4px 6px', borderRadius: 6, outline: 'none',
+                              background: C.s3, border: `1px solid ${C.gold}`,
+                              color: C.text, fontSize: 12, cursor: 'pointer',
+                            }}
+                          >
+                            <option value="">상태 없음</option>
+                            {STATUS_LIST.map(s => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                          <StatusBadge status={c.status} />
+                          <span style={{ fontSize: 9, color: C.sub, lineHeight: 1 }}>▼</span>
+                        </span>
+                      )}
+                    </td>
+                    <td
+                      style={{ ...td, color: C.sub, cursor: 'pointer', position: 'relative' }}
+                      onClick={e => {
+                        e.stopPropagation()
+                        setEditingConsultantId(c.id)
+                      }}
+                    >
+                      {savingConsultantId === c.id ? (
+                        <span style={{ fontSize: 11, color: C.gold }}>저장 중...</span>
+                      ) : editingConsultantId === c.id ? (
+                        <div ref={consultantSelectRef} onClick={e => e.stopPropagation()}>
+                          <select
+                            autoFocus
+                            defaultValue={c.consultant ?? ''}
+                            onChange={e => handleConsultantChange(c.id, e.target.value, c.company)}
+                            style={{
+                              padding: '4px 6px', borderRadius: 6, outline: 'none',
+                              background: C.s3, border: `1px solid ${C.gold}`,
+                              color: C.text, fontSize: 12, cursor: 'pointer',
+                            }}
+                          >
+                            <option value="">미배분</option>
+                            {consultants.map(m => (
+                              <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <span style={{ borderBottom: `1px dashed ${C.line}`, paddingBottom: 1 }}>
+                          {c.consultantName}
+                        </span>
+                      )}
+                    </td>
+                    <td style={td}>
+                      <span style={{ fontWeight: 600 }}>{c.company}</span>
+                      {c.pool && <span style={{ marginLeft: 6, fontSize: 10, padding: '1px 6px', borderRadius: 999, background: C.blue, color: C.base }}>풀</span>}
+                    </td>
+                    <td style={td}>{c.ceo || '-'}</td>
+                    <td style={{ ...td, color: C.sub }}>{c.phone || '-'}</td>
+                    <td style={{ ...td, color: C.sub }}>{c.industry || '-'}</td>
+                    <td style={{ ...td, color: C.sub }}>{c.received_date || '-'}</td>
+                    {isAdmin && (
+                      <td style={{ ...td, textAlign: 'center', padding: '10px 8px' }} onClick={e => e.stopPropagation()}>
+                        <button
+                          onClick={e => handleDelete(e, c)}
+                          title="고객사 삭제"
+                          style={{
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            color: '#dc3545', fontSize: 17, padding: '2px 6px', borderRadius: 4,
+                            lineHeight: 1, transition: 'opacity 0.15s',
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.opacity = '0.7' }}
+                          onMouseLeave={e => { e.currentTarget.style.opacity = '1' }}
+                        >🗑</button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {!loading && filtered.length === 0 && (
+            <div style={{ padding: 32, textAlign: 'center', color: C.sub }}>검색 결과가 없습니다.</div>
+          )}
+        </div>
+      )}
       <div style={{ marginTop: 8, color: C.sub, fontSize: 12 }}>총 {filtered.length}개 고객사</div>
 
       {showRegister && (
         <CustomerRegisterPanel
           consultants={consultants}
           profile={profile}
+          isMobile={isMobile}
           onClose={() => setShowRegister(false)}
           onCreated={handleCreated}
         />

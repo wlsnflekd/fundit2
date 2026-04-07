@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useT, useTheme } from '../theme.jsx'
+import { useT, useTheme, useIsMobile } from '../theme.jsx'
 import { supabase } from '../supabase.js'
 
 // 공통 토글 스위치
@@ -39,10 +39,11 @@ function inputStyle(C) {
 // 섹션 카드 + 제목
 function Section({ title, children }) {
   const C = useT()
+  const isMobile = useIsMobile()
   return (
     <div style={{
       background: C.s2, border: `1px solid ${C.line}`,
-      borderRadius: 14, padding: '20px 24px', marginBottom: 16,
+      borderRadius: 14, padding: isMobile ? 16 : '20px 24px', marginBottom: 16,
     }}>
       <div style={{
         fontSize: 14, fontWeight: 700, color: C.text,
@@ -64,8 +65,8 @@ function NotifRow({ label, desc, value, onChange }) {
       paddingBottom: 14, marginBottom: 14, borderBottom: `1px solid ${C.line}`,
     }}>
       <div style={{ flex: 1, paddingRight: 16 }}>
-        <div style={{ fontSize: 13, color: C.text, marginBottom: 3 }}>{label}</div>
-        <div style={{ fontSize: 12, color: C.sub }}>{desc}</div>
+        <div style={{ fontSize: 13, color: C.text, marginBottom: 3, whiteSpace: 'normal' }}>{label}</div>
+        <div style={{ fontSize: 12, color: C.sub, whiteSpace: 'normal' }}>{desc}</div>
       </div>
       <Toggle value={value} onChange={onChange} />
     </div>
@@ -75,6 +76,7 @@ function NotifRow({ label, desc, value, onChange }) {
 // 저장 버튼
 function SaveBtn({ onClick, saving }) {
   const C = useT()
+  const isMobile = useIsMobile()
   return (
     <button
       onClick={onClick}
@@ -84,6 +86,7 @@ function SaveBtn({ onClick, saving }) {
         cursor: saving ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 13,
         background: 'linear-gradient(135deg, #f0b840, #d4952a)', color: '#03060d',
         opacity: saving ? 0.7 : 1,
+        minHeight: isMobile ? 44 : undefined,
       }}
     >
       {saving ? '저장 중...' : '저장'}
@@ -103,6 +106,7 @@ function SaveMsg({ msg, isError }) {
 export default function Settings({ profile }) {
   const C = useT()
   const { isDark, toggleTheme } = useTheme()
+  const isMobile = useIsMobile()
 
   // 프로필
   const [profileName, setProfileName] = useState(profile?.name ?? '')
@@ -208,7 +212,7 @@ export default function Settings({ profile }) {
     : 'Free 플랜'
 
   return (
-    <div style={{ maxWidth: 640 }}>
+    <div style={{ maxWidth: isMobile ? '100%' : 640 }}>
       <h3 style={{ margin: '0 0 20px', color: C.text, fontFamily: 'Noto Sans KR, sans-serif' }}>설정</h3>
 
       {/* 섹션 1: 프로필 */}
@@ -326,8 +330,8 @@ export default function Settings({ profile }) {
         />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ flex: 1, paddingRight: 16 }}>
-            <div style={{ fontSize: 13, color: C.text, marginBottom: 3 }}>이메일 알림 수신</div>
-            <div style={{ fontSize: 12, color: C.sub }}>모든 알림을 이메일로도 수신합니다.</div>
+            <div style={{ fontSize: 13, color: C.text, marginBottom: 3, whiteSpace: 'normal' }}>이메일 알림 수신</div>
+            <div style={{ fontSize: 12, color: C.sub, whiteSpace: 'normal' }}>모든 알림을 이메일로도 수신합니다.</div>
           </div>
           <Toggle value={notifEmail} onChange={setNotifEmail} />
         </div>

@@ -1,6 +1,32 @@
 // 테마 상수 및 useT hook
 import { createContext, useContext, useState, useEffect } from 'react';
 
+// ── 반응형 미디어 쿼리 훅 ────────────────────────────────────────────────────
+// matchMedia API 기반: resize 이벤트와 달리 임계값 경계에서만 1회 발화 → throttle 불필요
+export function useMediaQuery(maxWidth) {
+  const [matches, setMatches] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.innerWidth <= maxWidth
+  })
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${maxWidth}px)`)
+    setMatches(mq.matches)
+    const handler = (e) => setMatches(e.matches)
+    if (mq.addEventListener) {
+      mq.addEventListener('change', handler)
+      return () => mq.removeEventListener('change', handler)
+    } else {
+      // Safari 13 이하 폴백
+      mq.addListener(handler)
+      return () => mq.removeListener(handler)
+    }
+  }, [maxWidth])
+  return matches
+}
+
+// 편의 훅 — 프로젝트 표준 모바일 브레이크포인트 768px
+export function useIsMobile() { return useMediaQuery(768) }
+
 const themes = {
   light: {
     base: '#ffffff', // 배경

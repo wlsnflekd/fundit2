@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useT } from '../theme.jsx'
+import { useT, useIsMobile } from '../theme.jsx'
 import {
   getPendingConsultants,
   approveProfile,
@@ -36,7 +36,7 @@ function TempPasswordModal({ member, tempPassword, onClose }) {
         style={{
           background: C.s2, border: `1px solid ${C.line}`,
           borderRadius: 16, padding: '32px 28px',
-          width: '100%', maxWidth: 380,
+          width: 'calc(100% - 32px)', maxWidth: 380,
           boxShadow: '0 8px 40px rgba(0,0,0,0.5)',
         }}
         onClick={e => e.stopPropagation()}
@@ -112,6 +112,7 @@ const fmtDate = (iso) => {
 
 export default function Team({ profile }) {
   const C = useT()
+  const isMobile = useIsMobile()
 
   // ── 초대 폼 상태 ──────────────────────────────────────────────────────────
   const [showInvite, setShowInvite] = useState(false)
@@ -260,7 +261,7 @@ export default function Team({ profile }) {
           )}
         </div>
         <div style={{ fontSize: 12, color: C.sub, marginBottom: 8 }}>{m.email}</div>
-        <div style={{ display: 'flex', gap: 16 }}>
+        <div style={{ display: 'flex', gap: 16, flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
           {[
             { label: '담당 고객사', value: m.customers ?? 0 },
             { label: '진행 신청건', value: m.applications ?? 0 },
@@ -367,19 +368,21 @@ export default function Team({ profile }) {
           padding: '16px 20px', marginBottom: 16,
         }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 12 }}>멤버 초대</div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+          <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 8, marginBottom: 8 }}>
             <input
               value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
               placeholder="이메일 주소 입력"
               style={{
                 flex: 1, padding: '9px 12px', background: C.s3, border: `1px solid ${C.line}`,
                 borderRadius: 8, color: C.text, fontSize: 13, outline: 'none',
+                width: isMobile ? '100%' : undefined,
               }}
             />
             <select value={inviteRole} onChange={e => setInviteRole(e.target.value)}
               style={{
                 padding: '9px 12px', background: C.s3, border: `1px solid ${C.line}`,
                 borderRadius: 8, color: C.text, fontSize: 13, outline: 'none', cursor: 'pointer',
+                width: isMobile ? '100%' : undefined,
               }}>
               <option value="consultant">컨설턴트</option>
               <option value="admin">관리자</option>
@@ -394,15 +397,17 @@ export default function Team({ profile }) {
               {inviteMsg}
             </div>
           )}
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 8 }}>
             <button onClick={handleInvite} style={{
               padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
               background: 'linear-gradient(135deg, #f0b840, #d4952a)', color: '#03060d', fontWeight: 700, fontSize: 13,
+              width: isMobile ? '100%' : undefined,
             }}>초대 발송</button>
             <button onClick={() => { setShowInvite(false); setInviteEmail(''); setInviteMsg('') }}
               style={{
                 padding: '8px 16px', borderRadius: 8, border: `1px solid ${C.line}`,
                 background: 'transparent', color: C.sub, fontSize: 13, cursor: 'pointer',
+                width: isMobile ? '100%' : undefined,
               }}>취소</button>
           </div>
         </div>
@@ -427,7 +432,8 @@ export default function Team({ profile }) {
             {pending.map(p => (
               <div key={p.id} style={{
                 background: C.s3, borderRadius: 10, padding: '12px 16px',
-                display: 'flex', alignItems: 'center', gap: 12,
+                display: 'flex', alignItems: isMobile ? 'flex-start' : 'center',
+                flexWrap: isMobile ? 'wrap' : 'nowrap', gap: 12,
               }}>
                 {/* 이니셜 아바타 */}
                 <div style={{
