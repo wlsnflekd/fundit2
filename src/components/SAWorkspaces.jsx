@@ -2,75 +2,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { useT } from '../theme.jsx'
 import { getSAWorkspacesWithMembers, approveProfile, rejectProfile, deleteWorkspace, updateMemberRole, resetUserPassword, deleteUser } from '../supabase.js'
 
-const SAMPLE_WORKSPACES = [
-  {
-    id: 'ws1',
-    name: '(주)그린컨설팅',
-    plan: 'pro',
-    created_at: '2025-11-03',
-    members: [
-      { id: 'm1', name: '김대표', email: 'kim@green.co.kr', role: 'admin', approval_status: 'approved' },
-      { id: 'm2', name: '이수진', email: 'lee@green.co.kr', role: 'consultant', approval_status: 'approved' },
-      { id: 'm3', name: '박민준', email: 'park@green.co.kr', role: 'consultant', approval_status: 'pending' },
-      { id: 'm4', name: '최지영', email: 'choi@green.co.kr', role: 'consultant', approval_status: 'approved' },
-    ],
-  },
-  {
-    id: 'ws2',
-    name: '미래정책자금연구소',
-    plan: 'free',
-    created_at: '2026-01-15',
-    members: [
-      { id: 'm5', name: '이소장', email: 'lee@mirae.co.kr', role: 'admin', approval_status: 'pending' },
-      { id: 'm6', name: '정민호', email: 'jung@mirae.co.kr', role: 'consultant', approval_status: 'pending' },
-    ],
-  },
-  {
-    id: 'ws3',
-    name: '한국기업지원센터',
-    plan: 'enterprise',
-    created_at: '2025-08-22',
-    members: [
-      { id: 'm7', name: '박센터장', email: 'park@kbec.kr', role: 'admin', approval_status: 'approved' },
-      { id: 'm8', name: '김진우', email: 'kimjw@kbec.kr', role: 'consultant', approval_status: 'approved' },
-      { id: 'm9', name: '윤하나', email: 'yoon@kbec.kr', role: 'consultant', approval_status: 'approved' },
-      { id: 'm10', name: '송태양', email: 'song@kbec.kr', role: 'consultant', approval_status: 'approved' },
-      { id: 'm11', name: '한예슬', email: 'han@kbec.kr', role: 'consultant', approval_status: 'approved' },
-      { id: 'm12', name: '조성민', email: 'cho@kbec.kr', role: 'consultant', approval_status: 'approved' },
-      { id: 'm13', name: '오현주', email: 'oh@kbec.kr', role: 'consultant', approval_status: 'approved' },
-    ],
-  },
-  {
-    id: 'ws4',
-    name: '정책자금파트너스',
-    plan: 'pro',
-    created_at: '2026-02-01',
-    members: [
-      { id: 'm14', name: '최파트너', email: 'choi@partners.co.kr', role: 'admin', approval_status: 'approved' },
-      { id: 'm15', name: '류정현', email: 'ryu@partners.co.kr', role: 'consultant', approval_status: 'approved' },
-      { id: 'm16', name: '강민서', email: 'kang@partners.co.kr', role: 'consultant', approval_status: 'pending' },
-    ],
-  },
-  {
-    id: 'ws5',
-    name: '스마트펀딩컨설팅',
-    plan: 'free',
-    created_at: '2026-03-18',
-    members: [
-      { id: 'm17', name: '정대표', email: 'jung@smart.co.kr', role: 'admin', approval_status: 'approved' },
-    ],
-  },
-  {
-    id: 'ws6',
-    name: '(미완성) 관리자없는워크스페이스',
-    plan: 'free',
-    created_at: '2026-04-01',
-    members: [
-      { id: 'm18', name: '홍길동', email: 'hong@test.co.kr', role: 'consultant', approval_status: 'pending' },
-    ],
-  },
-]
-
 const PLAN_LABEL = {
   free: { label: 'Free', color: '#6b84a8' },
   pro: { label: 'Pro', color: '#1d6fe8' },
@@ -600,8 +531,9 @@ function WorkspaceRow({ ws, onApprove, onReject, onRoleChange, onResetPassword, 
 
 export default function SAWorkspaces({ profile }) {
   const C = useT()
-  const [workspaces, setWorkspaces] = useState(SAMPLE_WORKSPACES)
-  const [loading, setLoading] = useState(false)
+  const [workspaces, setWorkspaces] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState(null)
   const [toastMsg, setToastMsg] = useState(null)
   const [pwResult, setPwResult] = useState(null) // { member, tempPassword }
   const currentUserId = profile?.id ?? null
@@ -613,9 +545,12 @@ export default function SAWorkspaces({ profile }) {
 
   const loadData = useCallback(async () => {
     setLoading(true)
+    setFetchError(null)
     const { data, error } = await getSAWorkspacesWithMembers()
-    if (!error && data?.length > 0) {
-      setWorkspaces(data)
+    if (error) {
+      setFetchError(error.message || '데이터를 불러오지 못했습니다.')
+    } else {
+      setWorkspaces(data ?? [])
     }
     setLoading(false)
   }, [])
@@ -780,7 +715,7 @@ export default function SAWorkspaces({ profile }) {
               color: accent ? C.gold : C.text,
               fontFamily: 'Bebas Neue, sans-serif', letterSpacing: '0.04em',
             }}>
-              {loading ? '...' : value}
+              {loading ? '...' : fetchError ? '—' : value}
             </div>
           </div>
         ))}
@@ -804,21 +739,62 @@ export default function SAWorkspaces({ profile }) {
       </div>
 
       {/* 아코디언 목록 */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {sorted.map(ws => (
-          <WorkspaceRow
-            key={ws.id}
-            ws={ws}
-            onApprove={handleApprove}
-            onReject={handleReject}
-            onRoleChange={handleRoleChange}
-            onResetPassword={handleResetPassword}
-            onDelete={handleDelete}
-            onDeleteMember={handleDeleteMember}
-            currentUserId={currentUserId}
-          />
-        ))}
-      </div>
+      {fetchError ? (
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          gap: 12, padding: '48px 0',
+          color: C.error, fontSize: 13,
+        }}>
+          <span style={{ fontSize: 22 }}>⚠</span>
+          <span>데이터를 불러오지 못했습니다.</span>
+          <span style={{ fontSize: 11, color: C.sub, maxWidth: 360, textAlign: 'center' }}>
+            {fetchError}
+          </span>
+          <button
+            onClick={loadData}
+            style={{
+              marginTop: 4, padding: '7px 20px', borderRadius: 8,
+              border: `1px solid ${C.line}`, background: 'transparent',
+              color: C.sub, fontSize: 12, cursor: 'pointer',
+            }}
+          >
+            다시 시도
+          </button>
+        </div>
+      ) : loading ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {[1, 2, 3].map(i => (
+            <div key={i} style={{
+              height: 54, borderRadius: 12,
+              background: C.s2, border: `1px solid ${C.line}`,
+              opacity: 0.5,
+            }} />
+          ))}
+        </div>
+      ) : sorted.length === 0 ? (
+        <div style={{
+          textAlign: 'center', padding: '60px 0',
+          color: C.sub, fontSize: 13,
+        }}>
+          등록된 워크스페이스가 없습니다.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {sorted.map(ws => (
+            <WorkspaceRow
+              key={ws.id}
+              ws={ws}
+              onApprove={handleApprove}
+              onReject={handleReject}
+              onRoleChange={handleRoleChange}
+              onResetPassword={handleResetPassword}
+              onDelete={handleDelete}
+              onDeleteMember={handleDeleteMember}
+              currentUserId={currentUserId}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
