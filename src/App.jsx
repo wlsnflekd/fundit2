@@ -507,6 +507,104 @@ function NotificationBell({ profile }) {
   )
 }
 
+// ─── 알림 팝업 + 띵동 소리 ────────────────────────────────────────────────────
+
+function playDing() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(880, ctx.currentTime)
+    osc.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.12)
+    gain.gain.setValueAtTime(0.25, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.0)
+    osc.start(ctx.currentTime)
+    osc.stop(ctx.currentTime + 1.0)
+  } catch { /* 오디오 미지원 무시 */ }
+}
+
+function NotificationPopup({ queue, onRead }) {
+  const C = useT()
+  const [idx, setIdx] = useState(0)
+  const prevIdx = useRef(-1)
+
+  const item = queue[idx]
+  const total = queue.length
+
+  useEffect(() => {
+    if (item && idx !== prevIdx.current) {
+      prevIdx.current = idx
+      playDing()
+    }
+  }, [idx, item])
+
+  if (!item) return null
+
+  const handleConfirm = () => {
+    onRead(item.id)
+    if (idx + 1 < total) {
+      setIdx(i => i + 1)
+    }
+  }
+
+  const typeIcon = item.type === 'schedule' ? '📅' : '🔔'
+
+  return (
+    <>
+      <div style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(3,6,13,0.55)',
+        zIndex: 910,
+      }} />
+      <div style={{
+        position: 'fixed',
+        top: '50%', left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: 360,
+        background: C.s2,
+        border: `1px solid ${C.line}`,
+        borderTop: `3px solid ${C.gold}`,
+        borderRadius: 16,
+        boxShadow: '0 16px 60px rgba(0,0,0,0.6)',
+        zIndex: 911,
+        padding: '28px 28px 24px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <span style={{ fontSize: 20 }}>{typeIcon}</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: C.text, flex: 1 }}>{item.title}</span>
+          {total > 1 && (
+            <span style={{ fontSize: 11, color: C.sub, whiteSpace: 'nowrap' }}>{idx + 1} / {total}</span>
+          )}
+        </div>
+        {item.body && (
+          <div style={{
+            fontSize: 13, color: C.sub, lineHeight: 1.65,
+            marginBottom: 20, padding: '12px 14px',
+            background: C.s3, borderRadius: 10,
+          }}>
+            {item.body}
+          </div>
+        )}
+        <button
+          onClick={handleConfirm}
+          style={{
+            width: '100%', padding: '11px',
+            borderRadius: 10, border: 'none',
+            background: 'linear-gradient(135deg, #f0b840, #d4952a)',
+            color: '#03060d', fontSize: 13, fontWeight: 700,
+            cursor: 'pointer',
+          }}
+        >
+          {idx + 1 < total ? `확인 (${total - idx - 1}개 더)` : '확인'}
+        </button>
+      </div>
+    </>
+  )
+}
+
 // 앱 최초 진입 시 세션 복원 대기 화면 (useT() 사용 가능 — ThemeProvider 안에서 렌더됨)
 function AppLoadingScreen() {
   const C = useT()
@@ -568,6 +666,57 @@ function MainApp({ profile, onLogout, rootTab, setRootTab }) {
   const C = useT()
   const [hoveredTab, setHoveredTab] = useState(null)
   const [mustChange, setMustChange] = useState(profile.must_change_password === true)
+
+  // 알림 팝업 큐
+  const [popupQueue, setPopupQueue] = useState([])
+
+  const handlePopupRead = async (id) => {
+    await markNotificationRead(id)
+    setPopupQueue(prev => prev.filter(n => n.id !== id))
+  }
+
+  // 앱 로드 시: 일정 하루 전 알림 체크 + 미확인 알림 팝업
+  useEffect(() => {
+    const run = async () => {
+      // 1. 일정 하루 전 알림 체크 (하루 1회만, localStorage 디덥)
+      const today = new Date().toISOString().slice(0, 10)
+      const lastCheck = localStorage.getItem('fundit_schedule_check')
+      if (lastCheck !== today) {
+        localStorage.setItem('fundit_schedule_check', today)
+        const tomorrow = new Date()
+        tomorrow.setDate(tomorrow.getDate() + 1)
+        const tomorrowStr = tomorrow.toISOString().slice(0, 10)
+        try {
+          const { data: schedules } = await supabase
+            .from('schedules')
+            .select('id, title, type, date')
+            .eq('date', tomorrowStr)
+          if (schedules?.length) {
+            const workspaceId = profile.workspace?.id || profile.workspace_id
+            await Promise.all(schedules.map(s =>
+              supabase.from('notifications').insert({
+                workspace_id: workspaceId,
+                user_id: profile.id,
+                type: 'schedule',
+                title: '내일 일정 알림',
+                body: `"${s.title}" 일정이 내일(${tomorrowStr}) 있습니다.`,
+              })
+            ))
+          }
+        } catch (e) {
+          console.warn('schedule check error:', e)
+        }
+      }
+
+      // 2. 미확인 알림 팝업 표시
+      const { data } = await getNotifications()
+      const unread = (data ?? []).filter(n => !n.is_read)
+      if (unread.length > 0) setPopupQueue(unread)
+    }
+
+    const timer = setTimeout(run, 2000)
+    return () => clearTimeout(timer)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 앱 진입 직후 모든 lazy 컴포넌트를 백그라운드에서 미리 로드
   // — 이후 탭 전환 시 Suspense fallback(로딩 화면)이 트리거되지 않음
@@ -684,6 +833,11 @@ function MainApp({ profile, onLogout, rootTab, setRootTab }) {
           profile={profile}
           onDone={() => setMustChange(false)}
         />
+      )}
+
+      {/* 알림 팝업 */}
+      {popupQueue.length > 0 && !mustChange && (
+        <NotificationPopup queue={popupQueue} onRead={handlePopupRead} />
       )}
 
       {/* 사이드바 */}
