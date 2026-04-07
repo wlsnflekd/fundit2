@@ -55,9 +55,21 @@ button {
 
 input, textarea, select {
   font-family: 'Noto Sans KR', sans-serif;
-  /* iOS 기본 스타일 제거 */
+}
+
+/* iOS 기본 스타일 제거 — checkbox/radio는 제외 (appearance:none 시 박스가 사라짐) */
+input:not([type="checkbox"]):not([type="radio"]), textarea, select {
   -webkit-appearance: none;
   appearance: none;
+}
+
+/* 체크박스 — 다크 테마에서 배경 위에 보이도록 명시적 스타일 */
+input[type="checkbox"] {
+  accent-color: #f0b840;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 /* ── 모바일 터치 최적화 ─────────────────────────────────────────────────── */
