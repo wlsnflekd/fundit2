@@ -372,6 +372,10 @@ export default function Applications({ consultantFilter, profile }) {
   const [selected, setSelected] = useState(null)
   const [showCreate, setShowCreate] = useState(false)
 
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'superadmin'
+  const [viewAll, setViewAll] = useState(false)
+  const [consultantViewFilter, setConsultantViewFilter] = useState('')
+
   const load = async () => {
     setLoading(true)
     setError('')
@@ -391,14 +395,21 @@ export default function Applications({ consultantFilter, profile }) {
 
   useEffect(() => { load() }, [])
 
-  const filtered = apps.filter(a => {
+  // 역할·뷰 기반 1차 필터 (consultantFilter prop은 "내 신청건" 탭용 기존 동작 유지)
+  const scopedApps = (() => {
+    if (consultantFilter) return apps.filter(a => a.consultant === consultantFilter)
+    if (!isAdmin || !viewAll) return apps.filter(a => a.consultant === profile?.id)
+    if (consultantViewFilter) return apps.filter(a => a.consultant === consultantViewFilter)
+    return apps
+  })()
+
+  // 2차: 상태 + 검색 필터
+  const filtered = scopedApps.filter(a => {
     const company = a.customer?.company ?? ''
     const fundName = a.fund?.name ?? a.name ?? ''
-    const consultantName = a.consultant_profile?.name ?? ''
     const matchStatus = filter === '전체' || a.status === filter
     const matchSearch = company.includes(search) || fundName.includes(search)
-    const matchConsultant = !consultantFilter || a.consultant === consultantFilter
-    return matchStatus && matchSearch && matchConsultant
+    return matchStatus && matchSearch
   })
 
   const th = { textAlign: 'left', padding: '8px 12px', color: C.sub, fontSize: 12, fontWeight: 600, borderBottom: `1px solid ${C.line}` }
@@ -406,6 +417,11 @@ export default function Applications({ consultantFilter, profile }) {
 
   const totalAmount = filtered.reduce((s, a) => s + (a.amount || 0), 0)
   const month = thisMonth()
+
+  const handleToggleViewAll = () => {
+    setViewAll(v => !v)
+    setConsultantViewFilter('')
+  }
 
   const handleCreated = (newApp) => {
     setApps(prev => [newApp, ...prev])
@@ -438,16 +454,46 @@ export default function Applications({ consultantFilter, profile }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h3 style={{ margin: 0, color: C.text }}>{consultantFilter ? '내 신청건' : '신청건 관리'}</h3>
-        <Button variant="primary" onClick={() => setShowCreate(true)}>+ 신청건 등록</Button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {isAdmin && !consultantFilter && (
+            <>
+              {viewAll && (
+                <select
+                  value={consultantViewFilter}
+                  onChange={e => setConsultantViewFilter(e.target.value)}
+                  style={{
+                    padding: '6px 10px', borderRadius: 8, border: `1px solid ${C.line}`,
+                    background: C.s3, color: C.text, fontSize: 12, outline: 'none', cursor: 'pointer',
+                  }}
+                >
+                  <option value="">전체 컨설턴트</option>
+                  {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              )}
+              <button
+                onClick={handleToggleViewAll}
+                style={{
+                  padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                  border: `1px solid ${viewAll ? C.gold : C.line}`,
+                  background: viewAll ? C.gold + '22' : 'transparent',
+                  color: viewAll ? C.gold : C.sub,
+                }}
+              >
+                {viewAll ? '내 신청건 보기' : '워크스페이스 전체보기'}
+              </button>
+            </>
+          )}
+          <Button variant="primary" onClick={() => setShowCreate(true)}>+ 신청건 등록</Button>
+        </div>
       </div>
 
       {/* 요약 카드 */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         {[
-          { label: '전체', value: apps.length, color: C.text },
-          { label: '진행중', value: apps.filter(a => ['서류준비', '검토중', '보완요청'].includes(a.status)).length, color: C.gold },
-          { label: '승인완료', value: apps.filter(a => a.status === '승인완료').length, color: C.green },
-          { label: '이번달 마감', value: apps.filter(a => a.deadline?.startsWith(month)).length, color: '#e74c3c' },
+          { label: '전체', value: scopedApps.length, color: C.text },
+          { label: '진행중', value: scopedApps.filter(a => ['서류준비', '검토중', '보완요청'].includes(a.status)).length, color: C.gold },
+          { label: '승인완료', value: scopedApps.filter(a => a.status === '승인완료').length, color: C.green },
+          { label: '이번달 마감', value: scopedApps.filter(a => a.deadline?.startsWith(month)).length, color: '#e74c3c' },
         ].map(stat => (
           <div key={stat.label} style={{ background: C.s2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ color: C.sub, fontSize: 12 }}>{stat.label}</span>

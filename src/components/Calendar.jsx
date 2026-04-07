@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useT } from '../theme.jsx'
-import { getSchedules, createSchedule, updateSchedule, deleteSchedule, getCustomers } from '../supabase.js'
+import { getSchedules, createSchedule, updateSchedule, deleteSchedule, getCustomers, getWorkspaceMembers } from '../supabase.js'
 
 const TYPE_COLOR = {
   '마감': '#e74c3c',
@@ -240,6 +240,7 @@ function EditSchedulePanel({ schedule, onClose, onUpdated }) {
 export default function Calendar({ profile }) {
   const C = useT()
   const [schedules, setSchedules] = useState([])
+  const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedType, setSelectedType] = useState('전체')
@@ -248,22 +249,37 @@ export default function Calendar({ profile }) {
   const [deletingId, setDeletingId] = useState(null)
   const today = todayStr()
 
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'superadmin'
+  const [viewAll, setViewAll] = useState(false)
+  const [consultantViewFilter, setConsultantViewFilter] = useState('')
+
   const load = async () => {
     setLoading(true)
     setError('')
-    const { data, error: err } = await getSchedules()
-    if (err) {
-      console.error(err)
+    const [schedulesRes, membersRes] = await Promise.all([
+      getSchedules(),
+      getWorkspaceMembers(),
+    ])
+    if (schedulesRes.error) {
+      console.error(schedulesRes.error)
       setError('일정을 불러오지 못했습니다. 다시 시도해주세요.')
     } else {
-      setSchedules(data ?? [])
+      setSchedules(schedulesRes.data ?? [])
     }
+    setMembers(membersRes.data ?? [])
     setLoading(false)
   }
 
   useEffect(() => { load() }, [])
 
-  const filtered = schedules.filter(s =>
+  // 역할·뷰 기반 1차 필터 (created_by 기준)
+  const scopedSchedules = (() => {
+    if (!isAdmin || !viewAll) return schedules.filter(s => s.created_by === profile?.id)
+    if (consultantViewFilter) return schedules.filter(s => s.created_by === consultantViewFilter)
+    return schedules
+  })()
+
+  const filtered = scopedSchedules.filter(s =>
     selectedType === '전체' || s.type === selectedType
   )
 
@@ -356,13 +372,43 @@ export default function Calendar({ profile }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h3 style={{ margin: 0, color: C.text }}>일정 관리</h3>
-        <button
-          onClick={() => setShowCreate(true)}
-          style={{
-            padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
-            background: 'linear-gradient(135deg, #f0b840, #d4952a)', color: '#03060d', fontWeight: 700, fontSize: 13,
-          }}
-        >+ 일정 추가</button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {isAdmin && (
+            <>
+              {viewAll && (
+                <select
+                  value={consultantViewFilter}
+                  onChange={e => setConsultantViewFilter(e.target.value)}
+                  style={{
+                    padding: '6px 10px', borderRadius: 8, border: `1px solid ${C.line}`,
+                    background: C.s3, color: C.text, fontSize: 12, outline: 'none', cursor: 'pointer',
+                  }}
+                >
+                  <option value="">전체 컨설턴트</option>
+                  {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              )}
+              <button
+                onClick={() => { setViewAll(v => !v); setConsultantViewFilter('') }}
+                style={{
+                  padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                  border: `1px solid ${viewAll ? C.gold : C.line}`,
+                  background: viewAll ? C.gold + '22' : 'transparent',
+                  color: viewAll ? C.gold : C.sub,
+                }}
+              >
+                {viewAll ? '내 일정 보기' : '워크스페이스 전체보기'}
+              </button>
+            </>
+          )}
+          <button
+            onClick={() => setShowCreate(true)}
+            style={{
+              padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
+              background: 'linear-gradient(135deg, #f0b840, #d4952a)', color: '#03060d', fontWeight: 700, fontSize: 13,
+            }}
+          >+ 일정 추가</button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -393,7 +439,7 @@ export default function Calendar({ profile }) {
             {past.map(s => <ScheduleItem key={s.id} s={s} />)}
           </>
         )}
-        {schedules.length === 0 && (
+        {scopedSchedules.length === 0 && (
           <div style={{ padding: 32, textAlign: 'center', color: C.sub }}>
             아직 등록된 일정이 없습니다. 첫 일정을 추가해보세요!
           </div>
