@@ -824,67 +824,36 @@ function TabAuth({ data, onChange, isAdmin, canViewAuth }) {
 // ─── 메인 패널 컴포넌트 ───────────────────────────────────────────────────────
 // ─── 이폼사인 계약서 발송 ────────────────────────────────────────────────────
 
-// P1363(r||s) → DER 변환 (Web Crypto ECDSA 출력 → 이폼사인 기대 형식)
-function p1363ToDer(p1363) {
-  const r = p1363.slice(0, 32)
-  const s = p1363.slice(32, 64)
-  function asn1Int(bytes) {
-    let i = 0
-    while (i < bytes.length - 1 && bytes[i] === 0) i++
-    const t = bytes.slice(i)
-    const padded = (t[0] & 0x80) ? new Uint8Array([0x00, ...t]) : t
-    return new Uint8Array([0x02, padded.length, ...padded])
-  }
-  const rDer = asn1Int(r)
-  const sDer = asn1Int(s)
-  return new Uint8Array([0x30, rDer.length + sDer.length, ...rDer, ...sDer])
-}
-
 async function sendEformsignContract({ company, ceo, phone, email }) {
-  const apiKey      = import.meta.env.VITE_EFORMSIGN_API_KEY
-  const privateHex  = import.meta.env.VITE_EFORMSIGN_PRIVATE_KEY
-  const templateId  = import.meta.env.VITE_EFORMSIGN_TEMPLATE_ID
+  const apiKey = import.meta.env.VITE_EFORMSIGN_API_KEY
+  const templateId = import.meta.env.VITE_EFORMSIGN_TEMPLATE_ID
 
-  if (!apiKey || !privateHex || !templateId) {
-    throw new Error('.env에 VITE_EFORMSIGN_API_KEY, VITE_EFORMSIGN_PRIVATE_KEY, VITE_EFORMSIGN_TEMPLATE_ID를 설정해주세요.')
+  if (!apiKey || !templateId) {
+    throw new Error('.env에 VITE_EFORMSIGN_API_KEY와 VITE_EFORMSIGN_TEMPLATE_ID를 설정해주세요.')
   }
 
-  // SHA256withECDSA 서명 (Web Crypto API)
+  // HMAC-SHA256 서명 생성 (Web Crypto API)
   const executionTime = Date.now()
-  const keyBytes = new Uint8Array(privateHex.match(/.{2}/g).map(b => parseInt(b, 16)))
-  const privateKey = await crypto.subtle.importKey(
-    'pkcs8', keyBytes,
-    { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']
+  const encoder = new TextEncoder()
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw', encoder.encode(apiKey),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
   )
-  const sigBuf = await crypto.subtle.sign(
-    { name: 'ECDSA', hash: { name: 'SHA-256' } },
-    privateKey,
-    new TextEncoder().encode(String(executionTime))
-  )
-  // P1363 → DER → hex
-  const derSig = p1363ToDer(new Uint8Array(sigBuf))
-  const sigHex = Array.from(derSig).map(b => b.toString(16).padStart(2, '0')).join('')
+  const sigBuf = await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(String(executionTime)))
+  const signature = btoa(String.fromCharCode(...new Uint8Array(sigBuf)))
 
   // 액세스 토큰 획득
-  const authRes = await fetch('https://service.eformsign.com/v2.0/api_auth/access_token', {
+  const authRes = await fetch('https://api.eformsign.com/v2.0/api_auth/access_token', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${btoa(apiKey)}`,
-      'eformsign_signature': sigHex,
-    },
+    headers: { 'Content-Type': 'application/json', 'eformsign_signature': signature },
     body: JSON.stringify({ execution_time: executionTime }),
   })
-  if (!authRes.ok) {
-    const t = await authRes.text().catch(() => '')
-    throw new Error(`이폼사인 인증 실패 (${authRes.status})${t ? ': ' + t.slice(0, 80) : ''}`)
-  }
-  const { oauth_token, api_key } = await authRes.json()
-  const access_token = oauth_token?.access_token
-  const apiUrl = api_key?.company?.api_url ?? 'https://kr-api.eformsign.com'
+  if (!authRes.ok) throw new Error(`이폼사인 인증 실패 (${authRes.status})`)
+  const { access_token, api_url } = await authRes.json()
+  const base = api_url ?? 'https://api.eformsign.com'
 
   // 계약서 발송
-  const docRes = await fetch(`${apiUrl}/v2.0/document/template`, {
+  const docRes = await fetch(`${base}/v2.0/document/template`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -894,7 +863,7 @@ async function sendEformsignContract({ company, ceo, phone, email }) {
       template_id: templateId,
       document_option: { title: `${company} 컨설팅 계약서` },
       recipients: [{
-        step_idx: 0,
+        step_idx: 1,
         name: ceo || company,
         id: phone || email || '',
         authentication_type: phone ? 'phone' : 'email',
