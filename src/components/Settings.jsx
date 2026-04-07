@@ -103,7 +103,7 @@ function SaveMsg({ msg, isError }) {
   )
 }
 
-export default function Settings({ profile }) {
+export default function Settings({ profile, onLogout }) {
   const C = useT()
   const { isDark, toggleTheme } = useTheme()
   const isMobile = useIsMobile()
@@ -336,6 +336,38 @@ export default function Settings({ profile }) {
           <Toggle value={notifEmail} onChange={setNotifEmail} />
         </div>
       </Section>
+
+      {/* 섹션 5: 계정 — 로그아웃 (모바일에서는 사이드바가 없으므로 항상 표시) */}
+      {onLogout && (
+        <Section title="계정">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 13, color: C.text, marginBottom: 3 }}>로그아웃</div>
+              <div style={{ fontSize: 12, color: C.sub }}>
+                {profile?.email ?? ''} 계정에서 로그아웃합니다.
+              </div>
+            </div>
+            <button
+              onClick={onLogout}
+              style={{
+                padding: '10px 24px',
+                minHeight: 44,
+                borderRadius: 9,
+                border: `1px solid ${C.error}55`,
+                background: `${C.error}11`,
+                color: C.error,
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'background 0.15s',
+                flexShrink: 0,
+              }}
+            >
+              로그아웃
+            </button>
+          </div>
+        </Section>
+      )}
     </div>
   )
 }

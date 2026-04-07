@@ -704,7 +704,7 @@ function TabBusiness({ data, onChange }) {
 }
 
 // ─── 탭4: 인증정보 ────────────────────────────────────────────────────────────
-function TabAuth({ data, onChange, isAdmin, canViewAuth }) {
+function TabAuth({ data, onChange, isAdmin, canViewAuth, loadError }) {
   const C = useT()
   const inputStyle = useInputStyle()
   const [showPw, setShowPw] = useState({})
@@ -779,6 +779,16 @@ function TabAuth({ data, onChange, isAdmin, canViewAuth }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* RPC 로드 에러 — DB 마이그레이션 미실행 등 */}
+      {loadError && (
+        <div style={{
+          padding: '10px 14px', borderRadius: 10,
+          background: `${C.error}11`, border: `1px solid ${C.error}44`,
+          color: C.error, fontSize: 12, lineHeight: 1.6,
+        }}>
+          ⚠ {loadError}
+        </div>
+      )}
       {/* 경고 배너 */}
       <div style={{
         padding: '10px 14px', borderRadius: 10,
@@ -834,6 +844,7 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
   const [savedOk, setSavedOk] = useState(false)
   const [activeTab, setActiveTab] = useState('basic')
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  const [sensitiveError, setSensitiveError] = useState('')
   const sensitiveLoadedRef = useRef(false)
 
   // 최신 데이터를 타이머 콜백에서 참조하기 위한 ref
@@ -865,6 +876,7 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
       setSaveError('')
       setSavedOk(false)
       setIsSaving(false)
+      setSensitiveError('')
     }
   }, [customer])
 
@@ -890,8 +902,18 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
     if (activeTab !== 'auth' || !canViewAuth || !customer?.id) return
     if (sensitiveLoadedRef.current) return
     sensitiveLoadedRef.current = true
-    getCustomerSensitive(customer.id).then(({ data }) => {
+    setSensitiveError('')
+    getCustomerSensitive(customer.id).then(({ data, error }) => {
+      if (error) {
+        sensitiveLoadedRef.current = false // 재시도 허용
+        const msg = error.code === 'PGRST202'
+          ? '인증정보 함수가 DB에 등록되지 않았습니다. 관리자에게 문의하세요. (fix_resident_id_400.sql 실행 필요)'
+          : `인증정보를 불러올 수 없습니다. (${error.message})`
+        setSensitiveError(msg)
+        return
+      }
       if (!data) return
+      setSensitiveError('')
       setEditData(prev => ({ ...prev, ...data }))
       editDataRef.current = { ...editDataRef.current, ...data }
     })
@@ -1034,7 +1056,7 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
         {activeTab === 'basic'    && <TabBasic    data={editData} onChange={handleChange} consultants={consultants} isAdmin={isAdmin} canViewAuth={canViewAuth} />}
         {activeTab === 'finance'  && <TabFinance  data={editData} onChange={handleChange} />}
         {activeTab === 'business' && <TabBusiness data={editData} onChange={handleChange} />}
-        {activeTab === 'auth'     && <TabAuth     data={editData} onChange={handleChange} isAdmin={isAdmin} canViewAuth={canViewAuth} />}
+        {activeTab === 'auth'     && <TabAuth     data={editData} onChange={handleChange} isAdmin={isAdmin} canViewAuth={canViewAuth} loadError={sensitiveError} />}
         <div style={{ height: 56 }} />
       </div>
 

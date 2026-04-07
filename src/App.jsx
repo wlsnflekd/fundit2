@@ -803,7 +803,7 @@ function MainApp({ profile, onLogout, rootTab, setRootTab }) {
     if (activeTab === 'distribution') return <CustomerDistribution profile={profile} />
     if (activeTab === 'team') return <Team profile={profile} />
     if (activeTab === 'stats') return <Stats />
-    if (activeTab === 'settings') return <Settings profile={profile} />
+    if (activeTab === 'settings') return <Settings profile={profile} onLogout={onLogout} />
     return <div>미정의 탭</div>
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, profile])
