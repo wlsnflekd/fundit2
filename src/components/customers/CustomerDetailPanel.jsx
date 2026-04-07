@@ -259,6 +259,15 @@ function useInputStyle() {
 
 // ─── 탭1: 기본정보 ────────────────────────────────────────────────────────────
 function TabBasic({ data, onChange, consultants, isAdmin, canViewAuth }) {
+  const memoRef = useRef(null)
+
+  // 초기 로드 및 값 변경 시 높이 자동 조정
+  useEffect(() => {
+    const el = memoRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = el.scrollHeight + 'px'
+  }, [data.consultation_memo])
   const C = useT()
   const inputStyle = useInputStyle()
 
@@ -474,10 +483,16 @@ function TabBasic({ data, onChange, consultants, isAdmin, canViewAuth }) {
 
       <FieldWrapper label="상담내용" spanFull>
         <textarea
+          ref={memoRef}
           rows={4}
-          style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }}
+          style={{ ...inputStyle, resize: 'none', lineHeight: 1.6, overflow: 'hidden' }}
           value={data.consultation_memo ?? ''}
-          onChange={e => onChange('consultation_memo', e.target.value)}
+          onChange={e => {
+            onChange('consultation_memo', e.target.value)
+            const el = e.target
+            el.style.height = 'auto'
+            el.style.height = el.scrollHeight + 'px'
+          }}
           placeholder="상담 내용을 입력하세요"
         />
       </FieldWrapper>
