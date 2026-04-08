@@ -992,6 +992,42 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
   // 인증정보 탭 열람 권한: admin이거나, staff 본인이 담당하는 고객
   const canViewAuth = isAdmin || isAssignedConsultant
 
+  // ── 패널 너비 드래그 조절 ────────────────────────────────────────────────
+  const DEFAULT_PANEL_WIDTH = 480
+  const MIN_PANEL_WIDTH = DEFAULT_PANEL_WIDTH
+  const MAX_PANEL_WIDTH = Math.round(DEFAULT_PANEL_WIDTH * 1.8) // 864
+  const [panelWidthState, setPanelWidthState] = useState(DEFAULT_PANEL_WIDTH)
+  const isDraggingWidth = useRef(false)
+  const dragStartX = useRef(0)
+  const dragStartWidth = useRef(0)
+
+  const handleWidthDragStart = (e) => {
+    if (isMobile) return
+    isDraggingWidth.current = true
+    dragStartX.current = e.clientX
+    dragStartWidth.current = panelWidthState
+    document.body.style.cursor = 'ew-resize'
+    document.body.style.userSelect = 'none'
+
+    const onMouseMove = (ev) => {
+      if (!isDraggingWidth.current) return
+      const delta = dragStartX.current - ev.clientX // 왼쪽 드래그 = 너비 증가
+      const newWidth = Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, dragStartWidth.current + delta))
+      setPanelWidthState(newWidth)
+    }
+
+    const onMouseUp = () => {
+      isDraggingWidth.current = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+  }
+
   // 인증정보 탭 진입 시 민감 컬럼 로드 (열람 권한 있을 때만, 이미 로드됐으면 재요청 안 함)
   useEffect(() => {
     if (activeTab !== 'auth' || !canViewAuth || !customer?.id) return
@@ -1102,7 +1138,7 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
     { id: 'auth',     label: '인증정보' },
   ]
 
-  const panelWidth = isMobile ? '100vw' : 480
+  const panelWidth = isMobile ? '100vw' : panelWidthState
 
   return (
     <div style={{
@@ -1111,6 +1147,25 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
       zIndex: 101, display: 'flex', flexDirection: 'column',
       boxShadow: '-8px 0 40px rgba(0,0,0,0.5)',
     }}>
+
+      {/* ── 너비 조절 드래그 핸들 (모바일 제외) ────────────────────────── */}
+      {!isMobile && (
+        <div
+          onMouseDown={handleWidthDragStart}
+          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(240,184,64,0.15)' }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 6,
+            cursor: 'ew-resize',
+            zIndex: 10,
+            background: 'transparent',
+          }}
+        />
+      )}
 
       {/* ── 헤더 ─────────────────────────────────────────────────────── */}
       <div style={{ padding: '18px 24px 16px', borderBottom: `1px solid ${C.line}`, background: C.s2, flexShrink: 0 }}>
