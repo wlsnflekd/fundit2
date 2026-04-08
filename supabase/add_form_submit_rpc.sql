@@ -8,6 +8,12 @@
 -- 해결: SECURITY DEFINER 함수로 RLS를 우회해 지정 workspace에만 INSERT
 --       anon 역할에 EXECUTE 권한 부여 → Apps Script에서 서비스 키 불필요
 --
+-- ⚠️  이 파일은 초기 버전입니다.
+--     p_business_age int, p_monthly_revenue numeric 으로 선언되어
+--     "1년~3년" → 13, "3000만원~7000만원" → 30007000 변환 버그가 있습니다.
+--     반드시 fix_submit_customer_form_text_types.sql 을 이후에 실행하여
+--     두 파라미터를 text 타입으로 교체하세요.
+--
 -- 실행: Supabase Dashboard > SQL Editor에 붙여넣기 후 실행
 -- ============================================================
 

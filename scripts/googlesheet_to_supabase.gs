@@ -35,10 +35,18 @@ var COL = {
   사업운영기간:  8,   // I: 사업운영기간
   월평균매출:    9,   // J: 월평균매출
   지역:          10,  // K: 지역
-  국세체납여부:  11,  // L: 국세체납여부
+  국세체납여부:  11,  // L: 국세체납여부 (있음/없음)
   AI추천기관:    12,  // M: AI추천기관
   AI예상금액:    13,  // N: AI예상금액
   AI분석결과:    14,  // O: AI분석결과
+  // ⚠️ 아래 컬럼은 구글 폼에 해당 질문이 추가된 경우에만 활성화하세요.
+  // 컬럼 인덱스(숫자)를 실제 시트 순서에 맞게 수정해야 합니다.
+  // 연체이력:      15,  // P: 연체이력 (있음/없음)
+  // 회생파산복구:  16,  // Q: 회생/파산복구 (있음/없음)
+  // 폐업이력:      17,  // R: 폐업이력 (있음/없음)
+  // 정책자금사용:  18,  // S: 정책자금 사용여부 (있음/없음)
+  // 스마트기기:    19,  // T: 스마트기기 이용여부 (있음/없음)
+  // 수출여부:      20,  // U: 수출여부 (있음/없음)
 };
 
 // ── 워크스페이스 ID ─────────────────────────────────────────
@@ -102,10 +110,21 @@ function buildCustomerPayload(row) {
   var businessType  = cleanString(row[COL.사업자유형]);
   var industry      = cleanString(row[COL.업종]);
   var region        = cleanString(row[COL.지역]);
-  var businessAge   = parseIntSafe(row[COL.사업운영기간]);
-  var monthlyRev    = parseNumericSafe(row[COL.월평균매출]);
-  var taxDelinquent = parseBoolean(row[COL.국세체납여부]);
+  var businessAge   = cleanString(row[COL.사업운영기간]);
+  var monthlyRev    = cleanString(row[COL.월평균매출]);
   var receivedDate  = parseDateSafe(row[COL.제출일시]);
+
+  // ── Boolean 필드 파싱 ────────────────────────────────────────
+  // parseBoolean() 규칙: "있음"/"예"/"Y"/"true"/"1" → true, 그 외("없음" 포함) → false
+  // ⚠️ 반전 로직 없음 — "있음" = true, "없음" = false 그대로 DB에 저장
+  var taxDelinquent   = parseBoolean(row[COL.국세체납여부]);
+  // 아래 필드는 COL에서 해당 인덱스를 활성화(주석 해제)한 뒤 사용하세요
+  var overdueHistory  = COL.연체이력    !== undefined ? parseBoolean(row[COL.연체이력])    : null;
+  var rehabilitation  = COL.회생파산복구 !== undefined ? parseBoolean(row[COL.회생파산복구]) : null;
+  var closureHistory  = COL.폐업이력    !== undefined ? parseBoolean(row[COL.폐업이력])    : null;
+  var policyFundUsage = COL.정책자금사용 !== undefined ? parseBoolean(row[COL.정책자금사용]) : null;
+  var smartDevice     = COL.스마트기기   !== undefined ? parseBoolean(row[COL.스마트기기])   : null;
+  var isExporter      = COL.수출여부     !== undefined ? parseBoolean(row[COL.수출여부])     : null;
 
   // 사업자번호 → business_reg_no 직접 매칭
   var bizNum    = cleanString(row[COL.사업자번호]);
@@ -134,7 +153,14 @@ function buildCustomerPayload(row) {
     region:            region,
     business_age:      businessAge,
     monthly_revenue:   monthlyRev,
+    // ── Boolean 필드 (있음=true, 없음=false — parseBoolean() 기준, 반전 없음) ──
     tax_delinquent:    taxDelinquent,
+    overdue_history:   overdueHistory,
+    rehabilitation:    rehabilitation,
+    closure_history:   closureHistory,
+    policy_fund_usage: policyFundUsage,
+    smart_device:      smartDevice,
+    is_exporter:       isExporter,
     required_funds:    requiredFunds,
     consultation_memo: memo,
     tags:              tags.length > 0 ? tags : null,
@@ -167,7 +193,14 @@ function insertToSupabase(payload) {
     p_region:            payload.region,
     p_business_age:      payload.business_age,
     p_monthly_revenue:   payload.monthly_revenue,
+    // ── Boolean 필드 (null이면 RPC에서 DB 기본값 사용) ──────────
     p_tax_delinquent:    payload.tax_delinquent,
+    p_overdue_history:   payload.overdue_history,
+    p_rehabilitation:    payload.rehabilitation,
+    p_closure_history:   payload.closure_history,
+    p_policy_fund_usage: payload.policy_fund_usage,
+    p_smart_device:      payload.smart_device,
+    p_is_exporter:       payload.is_exporter,
     p_required_funds:    payload.required_funds,
     p_consultation_memo: payload.consultation_memo,
     p_tags:              payload.tags,
@@ -219,7 +252,8 @@ function cleanString(val) {
   return s === '' ? null : s;
 }
 
-// "12개월", "2년", "24" 등에서 정수 추출
+// 정수 추출 — business_age/monthly_revenue에는 사용 금지 (text 컬럼)
+// required_funds 등 순수 숫자 필드에만 사용
 function parseIntSafe(val) {
   if (val === null || val === undefined || val === '') return null;
   var s = String(val).replace(/[^0-9]/g, '');
@@ -228,7 +262,8 @@ function parseIntSafe(val) {
   return isNaN(n) ? null : n;
 }
 
-// "500만원", "1,200,000" 등에서 숫자 추출 (만원 단위 → 원으로 변환)
+// 숫자 추출 — business_age/monthly_revenue에는 사용 금지 (text 컬럼)
+// "500만원", "1,200,000" 등 순수 숫자 필드에만 사용 (만원 단위 → 원으로 변환)
 function parseNumericSafe(val) {
   if (val === null || val === undefined || val === '') return null;
   var s = String(val).replace(/,/g, '').trim();
@@ -245,11 +280,11 @@ function parseNumericSafe(val) {
   return isNaN(n) ? null : n;
 }
 
-// "예", "Y", "true", "1" → true / 그 외 → false
+// "있음", "예", "Y", "true", "1" → true / 그 외("없음" 포함) → false
 function parseBoolean(val) {
   if (val === null || val === undefined) return false;
   var s = String(val).trim().toLowerCase();
-  return s === '예' || s === 'y' || s === 'yes' || s === 'true' || s === '1';
+  return s === '있음' || s === '예' || s === 'y' || s === 'yes' || s === 'true' || s === '1';
 }
 
 // Date 객체 또는 날짜 문자열 → "YYYY-MM-DD"

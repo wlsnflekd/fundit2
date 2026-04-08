@@ -189,10 +189,20 @@ function LeadSourceField({ value, onChange }) {
 // ─── Toggle 버튼쌍 (있음/없음) ────────────────────────────────────────────────
 // value를 명시적으로 boolean으로 강제 변환하여 DB에서 오는 값 타입 불일치(문자열/숫자) 방지
 // "있음" = true, "없음" = false
-function TogglePair({ label, value, onChange }) {
+// invertColor=true 이면 "있음"→빨강(위험 신호), "없음"→녹색(안전 신호)
+// 대상: tax_delinquent, overdue_history, rehabilitation, closure_history, policy_fund_usage
+function TogglePair({ label, value, onChange, invertColor }) {
   const C = useT()
   // DB에서 null/undefined/"true"/"false"/1/0 등이 올 수 있으므로 명시적 boolean 변환
   const boolValue = value === true || value === 1 || value === 'true'
+
+  // v=true(있음) 일 때 적용할 색상
+  // invertColor: 있음=빨강, 없음=녹색 / 일반: 있음=녹색, 없음=빨강
+  function getColor(v) {
+    if (v) return invertColor ? C.error : C.green
+    return invertColor ? C.green : C.error
+  }
+
   return (
     <div>
       <div style={{ fontSize: 11, color: C.sub, marginBottom: 6, fontWeight: 600, letterSpacing: '0.04em' }}>
@@ -201,6 +211,7 @@ function TogglePair({ label, value, onChange }) {
       <div style={{ display: 'flex', gap: 6 }}>
         {[true, false].map(v => {
           const isActive = boolValue === v
+          const activeColor = getColor(v)
           return (
             <button
               key={String(v)}
@@ -210,13 +221,13 @@ function TogglePair({ label, value, onChange }) {
                 padding: '6px 0',
                 borderRadius: 8,
                 border: isActive
-                  ? `1px solid ${v ? C.green : C.error}`
+                  ? `1px solid ${activeColor}`
                   : `1px solid ${C.line}`,
                 background: isActive
-                  ? (v ? `${C.green}22` : `${C.error}22`)
+                  ? `${activeColor}22`
                   : C.s3,
                 color: isActive
-                  ? (v ? C.green : C.error)
+                  ? activeColor
                   : C.sub,
                 fontSize: 12,
                 fontWeight: 600,
@@ -645,16 +656,19 @@ function TabFinance({ data, onChange }) {
         label="세금체납"
         value={data.tax_delinquent ?? false}
         onChange={v => onChange('tax_delinquent', v)}
+        invertColor
       />
       <TogglePair
         label="연체이력"
         value={data.overdue_history ?? false}
         onChange={v => onChange('overdue_history', v)}
+        invertColor
       />
       <TogglePair
         label="회생/파산복구"
         value={data.rehabilitation ?? false}
         onChange={v => onChange('rehabilitation', v)}
+        invertColor
       />
       <TogglePair
         label="수출여부"
@@ -681,11 +695,13 @@ function TabBusiness({ data, onChange }) {
         label="폐업이력"
         value={data.closure_history ?? false}
         onChange={v => onChange('closure_history', v)}
+        invertColor
       />
       <TogglePair
         label="정책자금 사용여부"
         value={data.policy_fund_usage ?? false}
         onChange={v => onChange('policy_fund_usage', v)}
+        invertColor
       />
       <FieldWrapper label="상시근로자수">
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
