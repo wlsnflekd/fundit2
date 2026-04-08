@@ -705,6 +705,22 @@ function TabBusiness({ data, onChange }) {
         onChange={v => onChange('policy_fund_usage', v)}
         invertColor
       />
+      {data.policy_fund_usage === true && (
+        <div style={{ gridColumn: '1 / -1', marginTop: -4 }}>
+          <input
+            type="text"
+            value={data.policy_fund_memo || ''}
+            onChange={e => onChange('policy_fund_memo', e.target.value || null)}
+            placeholder="사용 내역 입력"
+            style={{
+              width: '100%', boxSizing: 'border-box',
+              background: C.s3, border: `1px solid ${C.line}`,
+              borderRadius: 6, padding: '7px 10px',
+              color: C.text, fontSize: 13, outline: 'none',
+            }}
+          />
+        </div>
+      )}
       <FieldWrapper label="상시근로자수">
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <input
