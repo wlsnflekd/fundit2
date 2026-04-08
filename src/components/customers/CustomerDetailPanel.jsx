@@ -33,12 +33,13 @@ const LEAD_SOURCE_CONFIG = {
   유튜브:   { bg: '#dc354522', color: '#dc3545', border: '#dc354544' },
 }
 
-// 드롭다운 프리셋 목록 (직접입력 포함)
-const LEAD_SOURCE_PRESETS = [...Object.keys(LEAD_SOURCE_CONFIG), '직접입력']
+// 드롭다운 프리셋 목록 (직접입력 맨 위)
+const LEAD_SOURCE_PRESETS = ['직접입력', ...Object.keys(LEAD_SOURCE_CONFIG)]
 
 const STATUS_LIST = Object.keys(STATUS_CONFIG)
 
-const REGION_LIST = [
+const REGION_PRESETS = [
+  '직접입력',
   '서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종',
   '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주',
 ]
@@ -179,6 +180,69 @@ function LeadSourceField({ value, onChange }) {
           value={value ?? ''}
           onChange={e => onChange(e.target.value || null)}
           placeholder="유입경로 직접 입력"
+          autoFocus
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── 지역 드롭다운 + 직접입력 혼합 필드 ──────────────────────────────────────────
+function RegionField({ value, onChange }) {
+  const C = useT()
+  const PRESET_SET = new Set(REGION_PRESETS.filter(v => v !== '직접입력'))
+  const isCustom = value && !PRESET_SET.has(value)
+  const [direct, setDirect] = useState(isCustom)
+
+  useEffect(() => {
+    const custom = value && !PRESET_SET.has(value)
+    setDirect(custom)
+  }, [value])
+
+  const selectVal = direct ? '직접입력' : (value ?? '')
+
+  const inputStyle = {
+    padding: '6px 10px', borderRadius: 8, border: `1px solid ${C.line}`,
+    background: C.s3, color: C.text, fontSize: 13, width: '100%',
+    outline: 'none', boxSizing: 'border-box',
+  }
+
+  const handleSelect = (e) => {
+    const v = e.target.value
+    if (v === '직접입력') {
+      setDirect(true)
+      onChange(null)
+    } else if (v === '') {
+      setDirect(false)
+      onChange(null)
+    } else {
+      setDirect(false)
+      onChange(v)
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <select
+        value={selectVal}
+        onChange={handleSelect}
+        style={{
+          ...inputStyle,
+          cursor: 'pointer',
+          color: selectVal ? C.text : C.sub,
+        }}
+      >
+        <option value="">지역 선택</option>
+        {REGION_PRESETS.map(opt => (
+          <option key={opt} value={opt}>{opt}</option>
+        ))}
+      </select>
+      {direct && (
+        <input
+          style={inputStyle}
+          value={value ?? ''}
+          onChange={e => onChange(e.target.value || null)}
+          placeholder="지역 직접 입력"
           autoFocus
         />
       )}
@@ -379,14 +443,10 @@ function TabBasic({ data, onChange, consultants, isAdmin, canViewAuth }) {
       </FieldWrapper>
 
       <FieldWrapper label="지역">
-        <select
-          value={data.region ?? ''}
-          onChange={e => onChange('region', e.target.value || null)}
-          style={inputStyle}
-        >
-          <option value="">선택</option>
-          {REGION_LIST.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-        </select>
+        <RegionField
+          value={data.region}
+          onChange={v => onChange('region', v)}
+        />
       </FieldWrapper>
 
       <FieldWrapper label="업력">

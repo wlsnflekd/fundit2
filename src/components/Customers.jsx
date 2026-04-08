@@ -475,10 +475,10 @@ export default function Customers({ consultantFilter, profile }) {
                 <tr style={{ background: C.s1 }}>
                   <th style={th}>상태</th>
                   <th style={th}>담당자</th>
-                  <th style={th}>업체명</th>
+                  <th style={{ ...th, maxWidth: 160 }}>업체명</th>
                   <th style={th}>이름</th>
                   <th style={th}>연락처</th>
-                  <th style={th}>업종</th>
+                  <th style={{ ...th, maxWidth: 120 }}>업종</th>
                   <th style={th}>접수일</th>
                   {isAdmin && <th style={{ ...th, width: 36, textAlign: 'center' }}></th>}
                 </tr>
@@ -559,13 +559,17 @@ export default function Customers({ consultantFilter, profile }) {
                         </span>
                       )}
                     </td>
-                    <td style={td}>
-                      <span style={{ fontWeight: 600 }}>{c.company}</span>
-                      {c.pool && <span style={{ marginLeft: 6, fontSize: 10, padding: '1px 6px', borderRadius: 999, background: C.blue, color: C.base }}>풀</span>}
+                    <td style={{ ...td, maxWidth: 160 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                        <span title={c.company} style={{ fontWeight: 600, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', display: 'block', minWidth: 0, flex: 1 }}>{c.company}</span>
+                        {c.pool && <span style={{ flexShrink: 0, fontSize: 10, padding: '1px 6px', borderRadius: 999, background: C.blue, color: C.base }}>풀</span>}
+                      </div>
                     </td>
                     <td style={td}>{c.ceo || '-'}</td>
                     <td style={{ ...td, color: C.sub }}>{c.phone || '-'}</td>
-                    <td style={{ ...td, color: C.sub }}>{c.industry || '-'}</td>
+                    <td style={{ ...td, color: C.sub, maxWidth: 120 }}>
+                      <span title={c.industry || undefined} style={{ overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', display: 'block' }}>{c.industry || '-'}</span>
+                    </td>
                     <td style={{ ...td, color: C.sub }}>{c.received_date || '-'}</td>
                     {isAdmin && (
                       <td style={{ ...td, textAlign: 'center', padding: '10px 8px' }} onClick={e => e.stopPropagation()}>
