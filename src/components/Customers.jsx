@@ -369,6 +369,16 @@ export default function Customers({ consultantFilter, profile }) {
     setDeleteConfirm(null)
   }
 
+  useEffect(() => {
+    if (!deleteConfirm) return
+    const handler = (e) => {
+      if (e.key === 'Enter' && !deleting) confirmDelete()
+      if (e.key === 'Escape' && !deleting) setDeleteConfirm(null)
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [deleteConfirm, deleting])
+
   const isAdmin = profile?.role === 'admin' || profile?.role === 'superadmin'
 
   return (

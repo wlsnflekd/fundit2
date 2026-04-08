@@ -110,8 +110,8 @@ function buildCustomerPayload(row) {
   var businessType  = cleanString(row[COL.사업자유형]);
   var industry      = cleanString(row[COL.업종]);
   var region        = cleanString(row[COL.지역]);
-  var businessAge   = cleanString(row[COL.사업운영기간]);
-  var monthlyRev    = cleanString(row[COL.월평균매출]);
+  var businessAge  = cleanString(row[COL.사업운영기간]);
+  var monthlyRev   = cleanString(row[COL.월평균매출]);
   var receivedDate  = parseDateSafe(row[COL.제출일시]);
 
   // ── Boolean 필드 파싱 ────────────────────────────────────────
@@ -195,12 +195,6 @@ function insertToSupabase(payload) {
     p_monthly_revenue:   payload.monthly_revenue,
     // ── Boolean 필드 (null이면 RPC에서 DB 기본값 사용) ──────────
     p_tax_delinquent:    payload.tax_delinquent,
-    p_overdue_history:   payload.overdue_history,
-    p_rehabilitation:    payload.rehabilitation,
-    p_closure_history:   payload.closure_history,
-    p_policy_fund_usage: payload.policy_fund_usage,
-    p_smart_device:      payload.smart_device,
-    p_is_exporter:       payload.is_exporter,
     p_required_funds:    payload.required_funds,
     p_consultation_memo: payload.consultation_memo,
     p_tags:              payload.tags,

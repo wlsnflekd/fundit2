@@ -193,8 +193,10 @@ function LeadSourceField({ value, onChange }) {
 // 대상: tax_delinquent, overdue_history, rehabilitation, closure_history, policy_fund_usage
 function TogglePair({ label, value, onChange, invertColor }) {
   const C = useT()
-  // DB에서 null/undefined/"true"/"false"/1/0 등이 올 수 있으므로 명시적 boolean 변환
-  const boolValue = value === true || value === 1 || value === 'true'
+  // null/undefined → null(미선택), true/1/'true' → true, 그 외 → false
+  const normalizedValue = value == null
+    ? null
+    : (value === true || value === 1 || value === 'true' ? true : false)
 
   // v=true(있음) 일 때 적용할 색상
   // invertColor: 있음=빨강, 없음=녹색 / 일반: 있음=녹색, 없음=빨강
@@ -210,12 +212,12 @@ function TogglePair({ label, value, onChange, invertColor }) {
       </div>
       <div style={{ display: 'flex', gap: 6 }}>
         {[true, false].map(v => {
-          const isActive = boolValue === v
+          const isActive = normalizedValue === v
           const activeColor = getColor(v)
           return (
             <button
               key={String(v)}
-              onClick={() => onChange(v)}
+              onClick={() => onChange(normalizedValue === v ? null : v)}
               style={{
                 flex: 1,
                 padding: '6px 0',
@@ -660,19 +662,19 @@ function TabFinance({ data, onChange }) {
       />
       <TogglePair
         label="연체이력"
-        value={data.overdue_history ?? false}
+        value={data.overdue_history ?? null}
         onChange={v => onChange('overdue_history', v)}
         invertColor
       />
       <TogglePair
         label="회생/파산복구"
-        value={data.rehabilitation ?? false}
+        value={data.rehabilitation ?? null}
         onChange={v => onChange('rehabilitation', v)}
         invertColor
       />
       <TogglePair
         label="수출여부"
-        value={data.is_exporter ?? false}
+        value={data.is_exporter ?? null}
         onChange={v => onChange('is_exporter', v)}
       />
     </div>
@@ -688,18 +690,18 @@ function TabBusiness({ data, onChange }) {
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
       <TogglePair
         label="스마트기기 이용여부"
-        value={data.smart_device ?? false}
+        value={data.smart_device ?? null}
         onChange={v => onChange('smart_device', v)}
       />
       <TogglePair
         label="폐업이력"
-        value={data.closure_history ?? false}
+        value={data.closure_history ?? null}
         onChange={v => onChange('closure_history', v)}
         invertColor
       />
       <TogglePair
         label="정책자금 사용여부"
-        value={data.policy_fund_usage ?? false}
+        value={data.policy_fund_usage ?? null}
         onChange={v => onChange('policy_fund_usage', v)}
         invertColor
       />
