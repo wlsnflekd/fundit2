@@ -187,8 +187,12 @@ function LeadSourceField({ value, onChange }) {
 }
 
 // ─── Toggle 버튼쌍 (있음/없음) ────────────────────────────────────────────────
+// value를 명시적으로 boolean으로 강제 변환하여 DB에서 오는 값 타입 불일치(문자열/숫자) 방지
+// "있음" = true, "없음" = false
 function TogglePair({ label, value, onChange }) {
   const C = useT()
+  // DB에서 null/undefined/"true"/"false"/1/0 등이 올 수 있으므로 명시적 boolean 변환
+  const boolValue = value === true || value === 1 || value === 'true'
   return (
     <div>
       <div style={{ fontSize: 11, color: C.sub, marginBottom: 6, fontWeight: 600, letterSpacing: '0.04em' }}>
@@ -196,7 +200,7 @@ function TogglePair({ label, value, onChange }) {
       </div>
       <div style={{ display: 'flex', gap: 6 }}>
         {[true, false].map(v => {
-          const isActive = value === v
+          const isActive = boolValue === v
           return (
             <button
               key={String(v)}
@@ -373,34 +377,23 @@ function TabBasic({ data, onChange, consultants, isAdmin, canViewAuth }) {
       </FieldWrapper>
 
       <FieldWrapper label="업력">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <input
-            type="number"
-            style={{ ...inputStyle, flex: 1 }}
-            value={data.business_age ?? ''}
-            onChange={e => onChange('business_age', e.target.value === '' ? null : Number(e.target.value))}
-            placeholder="0"
-            min={0}
-          />
-          <span style={{ color: C.sub, fontSize: 13, whiteSpace: 'nowrap' }}>년</span>
-        </div>
+        <input
+          type="text"
+          style={inputStyle}
+          value={data.business_age ?? ''}
+          onChange={e => onChange('business_age', e.target.value || null)}
+          placeholder="예: 3년 2개월"
+        />
       </FieldWrapper>
 
       <FieldWrapper label="월평균매출">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <input
-            type="text"
-            inputMode="numeric"
-            style={{ ...inputStyle, flex: 1 }}
-            value={data.monthly_revenue ?? ''}
-            onChange={e => {
-              const v = e.target.value.replace(/[^0-9]/g, '')
-              onChange('monthly_revenue', v === '' ? null : Number(v))
-            }}
-            placeholder="0"
-          />
-          <span style={{ color: C.sub, fontSize: 13, whiteSpace: 'nowrap' }}>만원</span>
-        </div>
+        <input
+          type="text"
+          style={inputStyle}
+          value={data.monthly_revenue ?? ''}
+          onChange={e => onChange('monthly_revenue', e.target.value || null)}
+          placeholder="예: 3,500만원"
+        />
       </FieldWrapper>
 
       <FieldWrapper label="접수일">
@@ -458,13 +451,13 @@ function TabBasic({ data, onChange, consultants, isAdmin, canViewAuth }) {
       <FieldWrapper label="계약금">
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <input
-            type="number"
+            type="text"
             style={{ ...inputStyle, flex: 1 }}
             value={data.contract_amount ?? ''}
-            onChange={e => onChange('contract_amount', e.target.value === '' ? null : Number(e.target.value))}
-            placeholder="0"
+            onChange={e => onChange('contract_amount', e.target.value || null)}
+            placeholder="예: 150"
           />
-          <span style={{ color: C.sub, fontSize: 13, whiteSpace: 'nowrap' }}>원</span>
+          <span style={{ color: C.sub, fontSize: 13, whiteSpace: 'nowrap' }}>만원</span>
         </div>
       </FieldWrapper>
 
@@ -604,7 +597,15 @@ function TabFinance({ data, onChange }) {
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-      {numField('월평균매출', 'monthly_revenue', '만원')}
+      <FieldWrapper label="월평균매출">
+        <input
+          type="text"
+          style={inputStyle}
+          value={data.monthly_revenue ?? ''}
+          onChange={e => onChange('monthly_revenue', e.target.value || null)}
+          placeholder="예: 3,500만원"
+        />
+      </FieldWrapper>
       {numField('전년도매출', 'prev_year_revenue', '만원')}
       {numField('전전년도매출', 'prev2_year_revenue', '만원')}
       {numField('기대출', 'existing_loan', '만원')}

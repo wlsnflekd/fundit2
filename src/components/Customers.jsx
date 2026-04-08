@@ -201,18 +201,24 @@ export default function Customers({ consultantFilter, profile }) {
     try {
       const [custRes, membersRes] = await Promise.all([
         getCustomers(),
-        supabase.from('profiles').select('id, name').eq('approval_status', 'approved'),
+        supabase.from('profiles').select('id, name, role, created_at').eq('approval_status', 'approved'),
       ])
       if (custRes.error) console.error('getCustomers error:', custRes.error)
       if (membersRes.error) console.error('profiles error:', membersRes.error)
+      const sortedMembers = (membersRes.data ?? []).slice().sort((a, b) => {
+        const roleOrder = r => (r === 'admin' || r === 'superadmin') ? 0 : 1
+        const ro = roleOrder(a.role) - roleOrder(b.role)
+        if (ro !== 0) return ro
+        return new Date(a.created_at) - new Date(b.created_at)
+      })
       const memberMap = {}
-      ;(membersRes.data ?? []).forEach(m => { memberMap[m.id] = m.name })
+      sortedMembers.forEach(m => { memberMap[m.id] = m.name })
       const enriched = (custRes.data ?? []).map(c => ({
         ...c,
         consultantName: memberMap[c.consultant] || '-',
       }))
       setCustomers(enriched)
-      setConsultants(membersRes.data ?? [])
+      setConsultants(sortedMembers)
     } catch (err) {
       console.error('loadData exception:', err)
     } finally {
