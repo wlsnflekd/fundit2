@@ -24,6 +24,7 @@ export const STATUS_CONFIG = {
   거절:    { bg: '#ec489922', color: '#ec4899', border: '#ec489944' },
   기타:    { bg: '#6b728022', color: '#6b7280', border: '#6b728044' },
   중요:    { bg: '#dc262622', color: '#dc2626', border: '#dc262644' },
+  지원금문의: { bg: '#7c3aed22', color: '#7c3aed', border: '#7c3aed44' },
 }
 
 const LEAD_SOURCE_CONFIG = {

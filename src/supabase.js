@@ -274,8 +274,8 @@ export const getDashboardStats = async (profile = null) => {
       recentQ    = recentQ.eq('consultant', userId)   // 최근 배정된 내 고객사
       appStatusQ = appStatusQ.eq('consultant', userId)
     } else {
-      // admin: 신규고객사 섹션 = 아직 미배정 고객사
-      recentQ = recentQ.is('consultant', null)
+      // admin: 신규고객사 섹션 = status='신규' AND 미배정 고객사
+      recentQ = recentQ.eq('status', '신규').is('consultant', null)
     }
 
     // admin 전용: 미배정 고객사 수 (consultant IS NULL)
@@ -339,10 +339,12 @@ const SAFE_CUSTOMER_COLS = [
 ].join(', ')
 
 // workspace 내 고객사 전체 조회 (RLS로 tenant 격리, 민감 컬럼 제외)
+// 정렬: 1차 received_date 내림차순 (null 후순위), 2차 created_at 내림차순
 export const getCustomers = async () => {
   const { data, error } = await supabase
     .from('customers')
     .select(SAFE_CUSTOMER_COLS)
+    .order('received_date', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
   return { data, error }
 }
