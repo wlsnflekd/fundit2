@@ -470,21 +470,35 @@ export default function Customers({ consultantFilter, profile }) {
           {loading ? (
             <div style={{ padding: 32, textAlign: 'center', color: C.sub }}>불러오는 중...</div>
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <table style={{ width: '100%', minWidth: 890, borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+              <colgroup>
+                <col style={{ width: 90 }} />
+                <col style={{ width: 90 }} />
+                <col style={{ width: 150 }} />
+                <col style={{ width: 100 }} />
+                <col style={{ width: 120 }} />
+                <col style={{ width: 100 }} />
+                <col style={{ width: 100 }} />
+                <col style={{ width: 100 }} />
+                {isAdmin && <col style={{ width: 40 }} />}
+              </colgroup>
               <thead>
                 <tr style={{ background: C.s1 }}>
-                  <th style={th}>상태</th>
-                  <th style={th}>담당자</th>
-                  <th style={{ ...th, maxWidth: 160 }}>업체명</th>
-                  <th style={th}>이름</th>
-                  <th style={th}>연락처</th>
-                  <th style={{ ...th, maxWidth: 120 }}>업종</th>
-                  <th style={th}>접수일</th>
-                  {isAdmin && <th style={{ ...th, width: 36, textAlign: 'center' }}></th>}
+                  <th style={{ ...th, width: 90, minWidth: 90 }}>상태</th>
+                  <th style={{ ...th, width: 90, minWidth: 90 }}>담당자</th>
+                  <th style={{ ...th, width: 150, minWidth: 150 }}>업체명</th>
+                  <th style={{ ...th, width: 100, minWidth: 100 }}>이름</th>
+                  <th style={{ ...th, width: 120, minWidth: 120 }}>연락처</th>
+                  <th style={{ ...th, width: 100, minWidth: 100 }}>업종</th>
+                  <th style={{ ...th, width: 100, minWidth: 100 }}>유입경로</th>
+                  <th style={{ ...th, width: 100, minWidth: 100 }}>접수일</th>
+                  {isAdmin && <th style={{ ...th, width: 40, minWidth: 40, textAlign: 'center' }}></th>}
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(c => (
+                {filtered.map(c => {
+                  const ellipsis = { overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', display: 'block' }
+                  return (
                   <tr
                     key={c.id}
                     style={{ cursor: 'pointer', background: getRowBg(c), transition: 'background 0.1s' }}
@@ -492,8 +506,9 @@ export default function Customers({ consultantFilter, profile }) {
                     onMouseEnter={() => setHoveredId(c.id)}
                     onMouseLeave={() => setHoveredId(null)}
                   >
+                    {/* 상태 */}
                     <td
-                      style={{ ...td, cursor: 'pointer', position: 'relative' }}
+                      style={{ ...td, width: 90, minWidth: 90, maxWidth: 90, cursor: 'pointer', position: 'relative' }}
                       onClick={e => {
                         e.stopPropagation()
                         setEditingStatusId(c.id)
@@ -526,8 +541,9 @@ export default function Customers({ consultantFilter, profile }) {
                         </span>
                       )}
                     </td>
+                    {/* 담당자 */}
                     <td
-                      style={{ ...td, color: C.sub, cursor: 'pointer', position: 'relative' }}
+                      style={{ ...td, width: 90, minWidth: 90, maxWidth: 90, color: C.sub, cursor: 'pointer', position: 'relative' }}
                       onClick={e => {
                         e.stopPropagation()
                         setEditingConsultantId(c.id)
@@ -554,31 +570,47 @@ export default function Customers({ consultantFilter, profile }) {
                           </select>
                         </div>
                       ) : (
-                        <span style={{ borderBottom: `1px dashed ${C.line}`, paddingBottom: 1 }}>
+                        <span title={c.consultantName} style={{ ...ellipsis, borderBottom: `1px dashed ${C.line}`, paddingBottom: 1 }}>
                           {c.consultantName}
                         </span>
                       )}
                     </td>
-                    <td style={{ ...td, maxWidth: 160 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                    {/* 업체명 */}
+                    <td style={{ ...td, width: 150, minWidth: 150, maxWidth: 150 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, overflow: 'hidden' }}>
                         <span title={c.company} style={{ fontWeight: 600, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', display: 'block', minWidth: 0, flex: 1 }}>{c.company}</span>
                         {c.pool && <span style={{ flexShrink: 0, fontSize: 10, padding: '1px 6px', borderRadius: 999, background: C.blue, color: C.base }}>풀</span>}
                       </div>
                     </td>
-                    <td style={td}>{c.ceo || '-'}</td>
-                    <td style={{ ...td, color: C.sub }}>{c.phone || '-'}</td>
-                    <td style={{ ...td, color: C.sub, maxWidth: 120 }}>
-                      <span title={c.industry || undefined} style={{ overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', display: 'block' }}>{c.industry || '-'}</span>
+                    {/* 이름 */}
+                    <td style={{ ...td, width: 100, minWidth: 100, maxWidth: 100 }}>
+                      <span title={c.ceo || undefined} style={ellipsis}>{c.ceo || '-'}</span>
                     </td>
-                    <td style={{ ...td, color: C.sub }}>{c.received_date || '-'}</td>
+                    {/* 연락처 */}
+                    <td style={{ ...td, width: 120, minWidth: 120, maxWidth: 120, color: C.sub }}>
+                      <span title={c.phone || undefined} style={ellipsis}>{c.phone || '-'}</span>
+                    </td>
+                    {/* 업종 */}
+                    <td style={{ ...td, width: 100, minWidth: 100, maxWidth: 100, color: C.sub }}>
+                      <span title={c.industry || undefined} style={ellipsis}>{c.industry || '-'}</span>
+                    </td>
+                    {/* 유입경로 */}
+                    <td style={{ ...td, width: 100, minWidth: 100, maxWidth: 100, color: C.sub }}>
+                      <span title={c.lead_source || undefined} style={ellipsis}>{c.lead_source || '-'}</span>
+                    </td>
+                    {/* 접수일 */}
+                    <td style={{ ...td, width: 100, minWidth: 100, maxWidth: 100, color: C.sub }}>
+                      <span title={c.received_date || undefined} style={ellipsis}>{c.received_date || '-'}</span>
+                    </td>
+                    {/* 삭제버튼 */}
                     {isAdmin && (
-                      <td style={{ ...td, textAlign: 'center', padding: '10px 8px' }} onClick={e => e.stopPropagation()}>
+                      <td style={{ ...td, width: 40, minWidth: 40, maxWidth: 40, textAlign: 'center', padding: '10px 4px' }} onClick={e => e.stopPropagation()}>
                         <button
                           onClick={e => handleDelete(e, c)}
                           title="고객사 삭제"
                           style={{
                             background: 'none', border: 'none', cursor: 'pointer',
-                            color: '#dc3545', fontSize: 17, padding: '2px 6px', borderRadius: 4,
+                            color: '#dc3545', fontSize: 17, padding: '2px 4px', borderRadius: 4,
                             lineHeight: 1, transition: 'opacity 0.15s',
                           }}
                           onMouseEnter={e => { e.currentTarget.style.opacity = '0.7' }}
@@ -587,7 +619,8 @@ export default function Customers({ consultantFilter, profile }) {
                       </td>
                     )}
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           )}
