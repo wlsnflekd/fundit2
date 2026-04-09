@@ -949,6 +949,8 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
   const saveTimerRef = useRef(null)
   // 연속 저장 실패 카운터 — 3회 초과 시 자동저장 중단
   const saveFailCountRef = useRef(0)
+  // 한글 IME 조합 중 여부 — 조합 중엔 debounce 저장 예약 안 함
+  const isComposingRef = useRef(false)
 
   // 모바일 감지
   useEffect(() => {
@@ -958,10 +960,14 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
   }, [])
 
   // customer prop 변경 시 상태 초기화
-  // activeTab은 여기서 건드리지 않음 — 자동저장 후 onUpdate가 같은 고객 객체를 갱신해도 탭이 유지되도록
+  // - 다른 고객으로 전환: 전체 리셋
+  // - 같은 고객 데이터 갱신(Realtime/onUpdate): dirty 필드는 보존하여 입력 중 텍스트 유실 방지
   useEffect(() => {
-    if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null }
-    if (customer) {
+    if (!customer) return
+    const isNewCustomer = customer.id !== editDataRef.current?.id
+    if (isNewCustomer) {
+      // 다른 고객 선택 — 전체 리셋
+      if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null }
       const data = { ...customer }
       editDataRef.current = data
       dirtyFieldsRef.current = new Set()
@@ -973,6 +979,15 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
       setSavedOk(false)
       setIsSaving(false)
       setSensitiveError('')
+    } else {
+      // 같은 고객 갱신(Realtime UPDATE 또는 자동저장 후 onUpdate)
+      // dirty 필드는 사용자가 편집 중이므로 서버 데이터로 덮어쓰지 않음
+      const currentDirty = dirtyFieldsRef.current
+      const merged = { ...customer }
+      currentDirty.forEach(f => { merged[f] = editDataRef.current[f] })
+      editDataRef.current = merged
+      setEditData(merged)
+      // dirtyFields, saveError, savedOk, isSaving, sensitiveLoaded는 그대로 유지
     }
   }, [customer])
 
@@ -1098,9 +1113,16 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
       saveFailCountRef.current = 0
       setSaveError('')
       setSavedOk(true)
-      dirtyFieldsRef.current = new Set()
-      setDirtyFields(new Set())
-      onUpdate?.({ ...data })
+      // 저장 중 사용자가 수정한 필드는 dirty 유지 (비교: 저장 스냅샷 vs 현재 ref 값)
+      const newDirty = new Set(dirtyFieldsRef.current)
+      dirty.forEach(f => {
+        if (editDataRef.current[f] === data[f]) newDirty.delete(f)
+        // 저장 후 값이 달라진 필드는 아직 dirty — 다음 debounce가 재저장함
+      })
+      dirtyFieldsRef.current = newDirty
+      setDirtyFields(newDirty)
+      // 현재 editDataRef 기준으로 콜백 호출 (저장 스냅샷 아님 — stale 역전파 방지)
+      onUpdate?.({ ...editDataRef.current })
     }
   }
 
@@ -1115,8 +1137,12 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
     setSaveError('')
     setSavedOk(false)
 
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = setTimeout(() => doAutoSave(newData, newDirty), 300)
+    // 한글 IME 조합 중에는 debounce 예약 안 함 — compositionEnd 후 자동 예약됨
+    if (!isComposingRef.current) {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      // ref 사용: 타이머 실행 시점의 최신 데이터로 저장 (클로저 캡처 아님)
+      saveTimerRef.current = setTimeout(() => doAutoSave(editDataRef.current, dirtyFieldsRef.current), 300)
+    }
   }
 
   // 타이머를 취소하고 즉시 저장 후 닫기
@@ -1203,7 +1229,20 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
       </div>
 
       {/* ── 콘텐츠 영역 ────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px 0' }}>
+      {/* onCompositionStart/End: 이벤트 버블링으로 내부 모든 input에 적용됨 */}
+      <div
+        style={{ flex: 1, overflowY: 'auto', padding: '20px 24px 0' }}
+        onCompositionStart={() => { isComposingRef.current = true }}
+        onCompositionEnd={() => {
+          isComposingRef.current = false
+          // 조합 완료 후 debounce 예약 (compositionEnd 직후 onChange가 발화하므로 거기서 처리됨)
+          // 단, onChange가 발화하지 않는 경우(취소)를 위해 여기서도 예약
+          if (dirtyFieldsRef.current.size > 0) {
+            if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+            saveTimerRef.current = setTimeout(() => doAutoSave(editDataRef.current, dirtyFieldsRef.current), 300)
+          }
+        }}
+      >
         {activeTab === 'basic'    && <TabBasic    data={editData} onChange={handleChange} consultants={consultants} isAdmin={isAdmin} canViewAuth={canViewAuth} />}
         {activeTab === 'finance'  && <TabFinance  data={editData} onChange={handleChange} />}
         {activeTab === 'business' && <TabBusiness data={editData} onChange={handleChange} />}
