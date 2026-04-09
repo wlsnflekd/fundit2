@@ -338,6 +338,173 @@ function RecentCustomersSection({ C, loading, recentCustomers, onNavigate, isCon
   )
 }
 
+// ── 탭 캐시 (인메모리, 5분 TTL) ─────────────────────────────────────────────
+const bizInfoCache = {}
+const CACHE_TTL = 5 * 60 * 1000
+
+const BIZINFO_TABS = ['전체', '소진공', '중진공', '소상공인', '중소기업']
+
+function BizInfoSection({ C, isMobile }) {
+  const [activeTab, setActiveTab] = useState('전체')
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const cacheKey = activeTab
+    const cached = bizInfoCache[cacheKey]
+    if (cached && Date.now() - cached.ts < CACHE_TTL) {
+      setItems(cached.data)
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setItems([])
+
+    const url = `/api/bizinfo?tab=${encodeURIComponent(activeTab)}&pageUnit=10`
+    fetch(url)
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
+      .then(data => {
+        const list = data?.jsonArray ?? []
+        bizInfoCache[cacheKey] = { data: list, ts: Date.now() }
+        setItems(list)
+      })
+      .catch(err => {
+        setError('공지사항을 불러오지 못했습니다.')
+        console.error('[BizInfo]', err)
+      })
+      .finally(() => setLoading(false))
+  }, [activeTab])
+
+  return (
+    <div style={{ marginTop: 20 }}>
+      {/* 헤더 */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: 12, flexWrap: 'wrap', gap: 8,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>정책자금 공지사항</span>
+          <span style={{ fontSize: 11, color: C.sub }}>기업마당</span>
+        </div>
+        {/* 탭 필터 */}
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {BIZINFO_TABS.map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              style={{
+                padding: '3px 10px', borderRadius: 999, border: 'none',
+                cursor: 'pointer', fontSize: 11, fontWeight: 700,
+                background: activeTab === tab ? C.gold : C.s3,
+                color: activeTab === tab ? C.base : C.sub,
+                transition: 'background 0.15s',
+              }}
+            >{tab}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* 카드 목록 */}
+      <div style={{
+        background: C.s2, border: `1px solid ${C.line}`,
+        borderRadius: 14, overflow: 'hidden',
+      }}>
+        {loading ? (
+          /* 스켈레톤 */
+          <div style={{ padding: '8px 0' }}>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} style={{
+                padding: '12px 18px',
+                borderBottom: `1px solid ${C.line}`,
+                display: 'flex', flexDirection: 'column', gap: 8,
+              }}>
+                <span style={{ display: 'block', height: 13, width: `${60 + (i * 7) % 30}%`, borderRadius: 4, background: 'linear-gradient(90deg, var(--s3) 25%, var(--line) 50%, var(--s3) 75%)', backgroundSize: '400% 100%', animation: 'fundit-skeleton 1.4s ease infinite' }} />
+                <span style={{ display: 'block', height: 10, width: '35%', borderRadius: 4, background: 'linear-gradient(90deg, var(--s3) 25%, var(--line) 50%, var(--s3) 75%)', backgroundSize: '400% 100%', animation: 'fundit-skeleton 1.4s ease infinite' }} />
+              </div>
+            ))}
+          </div>
+        ) : error ? (
+          <div style={{ padding: '24px 18px', textAlign: 'center', color: C.sub, fontSize: 13 }}>{error}</div>
+        ) : items.length === 0 ? (
+          <div style={{ padding: '24px 18px', textAlign: 'center', color: C.sub, fontSize: 13 }}>해당 기관 공지사항이 없습니다.</div>
+        ) : (
+          items.map((item, idx) => (
+            <a
+              key={item.pblancId || idx}
+              href={item.pblancUrl || `https://www.bizinfo.go.kr/web/lay1/bbs/S1T122C128/AS/74/view.do?pblancId=${item.pblancId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'flex',
+                flexDirection: isMobile ? 'column' : 'row',
+                alignItems: isMobile ? 'flex-start' : 'center',
+                gap: isMobile ? 4 : 12,
+                padding: '11px 18px',
+                borderBottom: idx < items.length - 1 ? `1px solid ${C.line}` : 'none',
+                textDecoration: 'none',
+                transition: 'background 0.12s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = C.s3 }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+            >
+              {/* 기관명 배지 */}
+              <span style={{
+                display: 'inline-block', flexShrink: 0,
+                padding: '2px 8px', borderRadius: 999,
+                fontSize: 10, fontWeight: 700,
+                background: `${C.gold}22`, color: C.gold,
+                border: `1px solid ${C.gold}44`,
+                whiteSpace: 'nowrap',
+                maxWidth: isMobile ? '100%' : 100,
+                overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>
+                {item.jrsdInsttNm || item.excInsttNm || '기업마당'}
+              </span>
+              {/* 공고명 */}
+              <span style={{
+                flex: 1, fontSize: 13, color: C.text,
+                overflow: 'hidden', textOverflow: 'ellipsis',
+                whiteSpace: isMobile ? 'normal' : 'nowrap',
+                lineHeight: 1.5,
+              }}>
+                {item.pblancNm}
+              </span>
+              {/* 신청기간 */}
+              {item.reqstBeginEndDe && (
+                <span style={{
+                  flexShrink: 0, fontSize: 11, color: C.sub,
+                  whiteSpace: 'nowrap',
+                }}>
+                  {item.reqstBeginEndDe}
+                </span>
+              )}
+            </a>
+          ))
+        )}
+      </div>
+
+      {/* 더보기 링크 */}
+      <div style={{ textAlign: 'right', marginTop: 8 }}>
+        <a
+          href="https://www.bizinfo.go.kr/web/lay1/bbs/S1T122C128/AS/74/list.do"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ fontSize: 12, color: C.sub, textDecoration: 'none' }}
+          onMouseEnter={e => { e.currentTarget.style.color = C.gold }}
+          onMouseLeave={e => { e.currentTarget.style.color = C.sub }}
+        >
+          기업마당에서 전체 보기 →
+        </a>
+      </div>
+    </div>
+  )
+}
+
 export default function Dashboard({ profile, onNavigate }) {
   const C = useT()
   const isMobile = useIsMobile()
@@ -504,6 +671,9 @@ export default function Dashboard({ profile, onNavigate }) {
           )}
         </div>
       </div>
+
+      {/* 정책자금 공지사항 */}
+      <BizInfoSection C={C} isMobile={isMobile} />
     </div>
   )
 }
