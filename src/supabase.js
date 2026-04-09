@@ -4,6 +4,26 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// 환경변수 누락 조기 감지 — Vercel 빌드 시 VITE_ 변수가 누락되면 HTTP는 즉시 에러를 반환하지만
+// WebSocket(Realtime)은 비동기로 조용히 실패해 CHANNEL_ERROR status + err=undefined 패턴으로 나타남
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error(
+    '[FUNDIT] Supabase 환경변수 누락.',
+    '\n  VITE_SUPABASE_URL:', supabaseUrl ? supabaseUrl : '✗ undefined — 환경변수 없음',
+    '\n  VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? '✓ (값 있음)' : '✗ undefined — 환경변수 없음',
+    '\n  Vercel Dashboard > Settings > Environment Variables 에서',
+    '\n  Production 스코프 포함 여부 확인 후 재배포 필요'
+  )
+} else {
+  // 정상 케이스: URL과 key의 형식 유효성만 간단히 검증
+  if (!supabaseUrl.startsWith('https://') || !supabaseUrl.includes('.supabase.co')) {
+    console.warn('[FUNDIT] VITE_SUPABASE_URL 형식이 올바르지 않습니다:', supabaseUrl)
+  }
+  if (!supabaseAnonKey.startsWith('sb_') && !supabaseAnonKey.startsWith('eyJ')) {
+    console.warn('[FUNDIT] VITE_SUPABASE_ANON_KEY 형식이 올바르지 않습니다 (sb_ 또는 eyJ 로 시작해야 함)')
+  }
+}
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,   // JWT 만료 전 자동 갱신 — Realtime 연결 유지

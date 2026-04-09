@@ -258,8 +258,11 @@ export default function Customers({ consultantFilter, profile }) {
   useEffect(() => { loadData() }, [])
 
   // ── customers 테이블 Realtime 구독 ───────────────────────────────────────────
+  // 의존성을 profile 객체 전체가 아닌 workspaceId 문자열로 고정:
+  // profile 객체 참조가 바뀔 때마다 채널이 teardown→reconnect되는 race condition 방지
+  const _workspaceIdForRealtime = profile?.workspace?.id || profile?.workspace_id
   useEffect(() => {
-    const workspaceId = profile?.workspace?.id || profile?.workspace_id
+    const workspaceId = _workspaceIdForRealtime
     if (!workspaceId) return
 
     const getMemberName = (consultantId) =>
@@ -319,7 +322,7 @@ export default function Customers({ consultantFilter, profile }) {
             }
           }
           if (status === 'CHANNEL_ERROR') {
-            console.warn('[Realtime] customers 구독 오류', err, '— 30초 후 재시도')
+            console.warn('[Realtime] customers 구독 오류', err ?? '(err=undefined: WebSocket 연결 실패 — Vercel 환경변수 또는 Supabase Realtime 활성화 여부 확인)', '— 30초 후 재시도')
             retryTimer = setTimeout(() => {
               supabase.removeChannel(ch)
               subscribe()
@@ -334,7 +337,7 @@ export default function Customers({ consultantFilter, profile }) {
       clearTimeout(retryTimer)
       if (ch) supabase.removeChannel(ch)
     }
-  }, [profile]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [_workspaceIdForRealtime]) // workspaceId가 실제로 바뀔 때만 재구독
 
   // 담당자 드롭다운 외부 클릭 시 닫기
   useEffect(() => {

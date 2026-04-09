@@ -750,7 +750,9 @@ function MainApp({ profile, onLogout, rootTab, setRootTab }) {
         .subscribe((status, err) => {
           if (status === 'SUBSCRIBED') console.debug('[Realtime] 알림 구독 완료')
           if (status === 'CHANNEL_ERROR') {
-            console.warn('[Realtime] 알림 구독 오류', err, '— 30초 후 재시도')
+            // err가 undefined면 WebSocket 연결 자체가 실패한 것 (apikey 오류 또는 Realtime 비활성화)
+            // Vercel 배포 후 이 오류가 발생하면: 환경변수 VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY 확인
+            console.warn('[Realtime] 알림 구독 오류', err ?? '(err=undefined: WebSocket 연결 실패 — Vercel 환경변수 또는 Supabase Realtime 활성화 여부 확인)', '— 30초 후 재시도')
             retryTimer = setTimeout(() => {
               supabase.removeChannel(ch)
               subscribe()
