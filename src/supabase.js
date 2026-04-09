@@ -14,6 +14,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     params: {
       eventsPerSecond: 10,    // Free Plan 제한 명시
     },
+    log_level: 'info',        // WebSocket 연결/인증 과정 콘솔에 출력 (디버깅용)
   },
 });
 

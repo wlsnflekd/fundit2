@@ -269,68 +269,64 @@ export default function Customers({ consultantFilter, profile }) {
     let ch = null
 
     const subscribe = () => {
-    ch = supabase
-      .channel(`customers:${workspaceId}`)
+      ch = supabase
+        .channel(`customers:${workspaceId}`)
       .on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'customers',
-      }, (payload) => {
-        // 클라이언트에서 workspace 격리 (RLS가 서버 보안 담당, 여기서 이중 체크)
-        if (payload.new.workspace_id !== workspaceId) return
-        setCustomers(prev => {
-          // 이미 handleCreated()로 낙관적 추가된 row는 중복 방지
-          if (prev.some(c => c.id === payload.new.id)) return prev
-          return [{ ...payload.new, consultantName: getMemberName(payload.new.consultant) }, ...prev]
+          event: 'INSERT', schema: 'public', table: 'customers',
+        }, (payload) => {
+          if (payload.new.workspace_id !== workspaceId) return
+          setCustomers(prev => {
+            if (prev.some(c => c.id === payload.new.id)) return prev
+            return [{ ...payload.new, consultantName: getMemberName(payload.new.consultant) }, ...prev]
+          })
         })
-      })
-      .on('postgres_changes', {
-        event: 'UPDATE', schema: 'public', table: 'customers',
-      }, (payload) => {
-        if (payload.new.workspace_id !== workspaceId) return
-        const updated = payload.new
-        setCustomers(prev => prev.map(c => {
-          if (c.id !== updated.id) return c
-          const merged = { ...c, ...updated, consultantName: getMemberName(updated.consultant) }
-          // 현재 인라인 편집 중인 필드는 Realtime 덮어쓰기 방지
-          if (editingMemoIdRef.current === updated.id) merged.quick_memo = c.quick_memo
-          if (editingStatusIdRef.current === updated.id) merged.status = c.status
-          if (editingConsultantIdRef.current === updated.id) {
-            merged.consultant = c.consultant
-            merged.consultantName = c.consultantName
-          }
-          return merged
-        }))
-        // 열린 상세 패널 row도 갱신 (편집 중이 아닌 필드만)
-        setSelected(prev => {
-          if (prev?.id !== updated.id) return prev
-          const merged = { ...prev, ...updated, consultantName: getMemberName(updated.consultant) }
-          if (editingMemoIdRef.current === updated.id) merged.quick_memo = prev.quick_memo
-          if (editingStatusIdRef.current === updated.id) merged.status = prev.status
-          if (editingConsultantIdRef.current === updated.id) {
-            merged.consultant = prev.consultant
-            merged.consultantName = prev.consultantName
-          }
-          return merged
+        .on('postgres_changes', {
+          event: 'UPDATE', schema: 'public', table: 'customers',
+        }, (payload) => {
+          if (payload.new.workspace_id !== workspaceId) return
+          const updated = payload.new
+          setCustomers(prev => prev.map(c => {
+            if (c.id !== updated.id) return c
+            const merged = { ...c, ...updated, consultantName: getMemberName(updated.consultant) }
+            if (editingMemoIdRef.current === updated.id) merged.quick_memo = c.quick_memo
+            if (editingStatusIdRef.current === updated.id) merged.status = c.status
+            if (editingConsultantIdRef.current === updated.id) {
+              merged.consultant = c.consultant
+              merged.consultantName = c.consultantName
+            }
+            return merged
+          }))
+          setSelected(prev => {
+            if (prev?.id !== updated.id) return prev
+            const merged = { ...prev, ...updated, consultantName: getMemberName(updated.consultant) }
+            if (editingMemoIdRef.current === updated.id) merged.quick_memo = prev.quick_memo
+            if (editingStatusIdRef.current === updated.id) merged.status = prev.status
+            if (editingConsultantIdRef.current === updated.id) {
+              merged.consultant = prev.consultant
+              merged.consultantName = prev.consultantName
+            }
+            return merged
+          })
         })
-      })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          if (realtimeSubscribedRef.current) {
-            console.debug('[Realtime] customers 재연결, 데이터 재로드')
-            loadData()
-          } else {
-            realtimeSubscribedRef.current = true
-            console.debug('[Realtime] customers 구독 완료')
+        .subscribe((status, err) => {
+          if (status === 'SUBSCRIBED') {
+            if (realtimeSubscribedRef.current) {
+              console.debug('[Realtime] customers 재연결, 데이터 재로드')
+              loadData()
+            } else {
+              realtimeSubscribedRef.current = true
+              console.debug('[Realtime] customers 구독 완료')
+            }
           }
-        }
-        if (status === 'CHANNEL_ERROR') {
-          console.warn('[Realtime] customers 구독 오류 — 30초 후 재시도')
-          retryTimer = setTimeout(() => {
-            supabase.removeChannel(ch)
-            subscribe()
-          }, 30000)
-        }
-        if (status === 'TIMED_OUT') console.warn('[Realtime] customers 구독 타임아웃')
-      })
+          if (status === 'CHANNEL_ERROR') {
+            console.warn('[Realtime] customers 구독 오류', err, '— 30초 후 재시도')
+            retryTimer = setTimeout(() => {
+              supabase.removeChannel(ch)
+              subscribe()
+            }, 30000)
+          }
+          if (status === 'TIMED_OUT') console.warn('[Realtime] customers 구독 타임아웃')
+        })
     } // end subscribe()
 
     subscribe()

@@ -747,10 +747,10 @@ function MainApp({ profile, onLogout, rootTab, setRootTab }) {
             setNotifRefreshSignal(prev => prev + 1)  // bell 즉시 갱신
           }
         })
-        .subscribe((status) => {
+        .subscribe((status, err) => {
           if (status === 'SUBSCRIBED') console.debug('[Realtime] 알림 구독 완료')
           if (status === 'CHANNEL_ERROR') {
-            console.warn('[Realtime] 알림 구독 오류 — 30초 후 재시도')
+            console.warn('[Realtime] 알림 구독 오류', err, '— 30초 후 재시도')
             retryTimer = setTimeout(() => {
               supabase.removeChannel(ch)
               subscribe()
@@ -765,7 +765,7 @@ function MainApp({ profile, onLogout, rootTab, setRootTab }) {
       clearTimeout(retryTimer)
       if (ch) supabase.removeChannel(ch)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [profile?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 앱 진입 직후 모든 lazy 컴포넌트를 백그라운드에서 미리 로드
   // — 이후 탭 전환 시 Suspense fallback(로딩 화면)이 트리거되지 않음
