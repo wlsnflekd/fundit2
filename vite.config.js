@@ -1,49 +1,14 @@
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// 탭 → 기업마당 jrsdInsttNm 매핑 (api/bizinfo.js와 동일하게 유지)
-const TAB_KEYWORDS = {
-  '소진공': '소상공인시장진흥공단',
-  '중진공': '중소벤처기업진흥공단',
-  '소상공인': '소상공인',
-  '중소기업': '중소기업진흥',
-}
-
 // https://vite.dev/config/
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '')
-  const bizinfoKey = env.BIZINFO_API_KEY
-
-  return {
+export default defineConfig({
   plugins: [react()],
   server: {
     host: 'localhost',
     hmr: {
       protocol: 'ws',
       host: 'localhost',
-    },
-    proxy: {
-      // 로컬 개발 시 /api/bizinfo → bizinfo.go.kr 직접 프록시
-      // (Vite dev 서버는 Vercel 서버리스 함수를 실행하지 않으므로)
-      '/api/bizinfo': {
-        target: 'https://www.bizinfo.go.kr',
-        changeOrigin: true,
-        secure: true,
-        configure: (proxy) => {
-          proxy.on('proxyReq', (proxyReq, req) => {
-            const url = new URL(req.url, 'http://localhost')
-            const tab      = url.searchParams.get('tab')      || '전체'
-            const pageUnit = url.searchParams.get('pageUnit') || '20'
-            const page     = url.searchParams.get('page')     || '1'
-
-            let path = `/uss/rss/bizinfoApi.do?crtfcKey=${bizinfoKey}&dataType=json&pageUnit=${pageUnit}&pageIndex=${page}`
-            if (tab !== '전체' && TAB_KEYWORDS[tab]) {
-              path += `&jrsdInsttNm=${encodeURIComponent(TAB_KEYWORDS[tab])}`
-            }
-            proxyReq.path = path
-          })
-        },
-      },
     },
   },
   build: {
@@ -83,5 +48,4 @@ export default defineConfig(({ mode }) => {
       },
     },
   },
-  } // return 끝
-}) // defineConfig 끝
+})
