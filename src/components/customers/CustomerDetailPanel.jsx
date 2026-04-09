@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import { useT } from '../../theme.jsx'
 import { supabase, getCustomerSensitive } from '../../supabase.js'
+import { DetailSkeleton } from '../Common.jsx'
 
 // 민감 컬럼 목록 — 일반 UPDATE 경로를 타지 않고 RPC로만 저장
 const SENSITIVE_FIELDS = new Set([
@@ -1243,10 +1244,16 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
           }
         }}
       >
-        {activeTab === 'basic'    && <TabBasic    data={editData} onChange={handleChange} consultants={consultants} isAdmin={isAdmin} canViewAuth={canViewAuth} />}
-        {activeTab === 'finance'  && <TabFinance  data={editData} onChange={handleChange} />}
-        {activeTab === 'business' && <TabBusiness data={editData} onChange={handleChange} />}
-        {activeTab === 'auth'     && <TabAuth     data={editData} onChange={handleChange} isAdmin={isAdmin} canViewAuth={canViewAuth} loadError={sensitiveError} />}
+        {Object.keys(editData).length === 0 ? (
+          <DetailSkeleton fieldCount={8} />
+        ) : (
+          <>
+            {activeTab === 'basic'    && <TabBasic    data={editData} onChange={handleChange} consultants={consultants} isAdmin={isAdmin} canViewAuth={canViewAuth} />}
+            {activeTab === 'finance'  && <TabFinance  data={editData} onChange={handleChange} />}
+            {activeTab === 'business' && <TabBusiness data={editData} onChange={handleChange} />}
+            {activeTab === 'auth'     && <TabAuth     data={editData} onChange={handleChange} isAdmin={isAdmin} canViewAuth={canViewAuth} loadError={sensitiveError} />}
+          </>
+        )}
         <div style={{ height: 56 }} />
       </div>
 

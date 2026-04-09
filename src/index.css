@@ -131,3 +131,9 @@ body.modal-open {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* 스켈레톤 shimmer 애니메이션 */
+@keyframes fundit-skeleton {
+  from { background-position: 200% center; }
+  to   { background-position: -200% center; }
+}

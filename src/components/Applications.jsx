@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useT, useIsMobile } from '../theme.jsx'
-import { StatusBadge, Button, BottomSheet } from './Common.jsx'
+import { StatusBadge, Button, BottomSheet, TableSkeleton } from './Common.jsx'
 import { getApplications, createApplication, updateApplication, deleteApplication, getCustomers, getFunds, getWorkspaceMembers } from '../supabase.js'
 
 const STATUS_FILTERS = ['전체', '신청예정', '서류준비', '검토중', '보완요청', '승인완료', '반려']
@@ -528,7 +528,28 @@ export default function Applications({ consultantFilter, profile }) {
   }
 
   if (loading) {
-    return <div style={{ padding: 32, textAlign: 'center', color: C.sub }}>불러오는 중...</div>
+    return (
+      <div>
+        {/* 상단 요약 카드 스켈레톤 */}
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} style={{
+              flex: 1, minWidth: 120,
+              background: C.s2, border: `1px solid ${C.line}`,
+              borderRadius: 12, padding: '14px 16px',
+              display: 'flex', flexDirection: 'column', gap: 10,
+            }}>
+              <span style={{ display: 'block', height: 10, width: '60%', borderRadius: 4, background: 'linear-gradient(90deg, var(--s3) 25%, var(--line) 50%, var(--s3) 75%)', backgroundSize: '400% 100%', animation: 'fundit-skeleton 1.4s ease infinite' }} />
+              <span style={{ display: 'block', height: 24, width: '40%', borderRadius: 4, background: 'linear-gradient(90deg, var(--s3) 25%, var(--line) 50%, var(--s3) 75%)', backgroundSize: '400% 100%', animation: 'fundit-skeleton 1.4s ease infinite' }} />
+            </div>
+          ))}
+        </div>
+        {/* 테이블 스켈레톤 */}
+        <div style={{ background: C.s2, border: `1px solid ${C.line}`, borderRadius: 14, overflow: 'hidden' }}>
+          <TableSkeleton rows={8} cols={8} />
+        </div>
+      </div>
+    )
   }
 
   if (error) {

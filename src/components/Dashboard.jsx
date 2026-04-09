@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useT, useIsMobile } from '../theme.jsx'
-import { StatusBadge } from './Common.jsx'
+import { StatusBadge, CardSkeleton } from './Common.jsx'
 import { getPendingConsultants, approveProfile, rejectProfile, getDashboardStats, getNotifications } from '../supabase.js'
 
 const KPI_CARDS = [
@@ -298,7 +298,15 @@ function RecentCustomersSection({ C, loading, recentCustomers, onNavigate, isCon
       </div>
 
       {loading ? (
-        <div style={{ padding: '24px 20px', textAlign: 'center', color: C.sub, fontSize: 13 }}>불러오는 중...</div>
+        <div style={{ padding: '8px 20px 12px' }}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: `1px solid ${C.line}` }}>
+              <span style={{ display: 'block', width: 28, height: 28, borderRadius: '50%', flexShrink: 0, background: 'linear-gradient(90deg, var(--s3) 25%, var(--line) 50%, var(--s3) 75%)', backgroundSize: '400% 100%', animation: 'fundit-skeleton 1.4s ease infinite' }} />
+              <span style={{ display: 'block', flex: 1, height: 12, borderRadius: 4, background: 'linear-gradient(90deg, var(--s3) 25%, var(--line) 50%, var(--s3) 75%)', backgroundSize: '400% 100%', animation: 'fundit-skeleton 1.4s ease infinite' }} />
+              <span style={{ display: 'block', width: 52, height: 18, borderRadius: 999, flexShrink: 0, background: 'linear-gradient(90deg, var(--s3) 25%, var(--line) 50%, var(--s3) 75%)', backgroundSize: '400% 100%', animation: 'fundit-skeleton 1.4s ease infinite' }} />
+            </div>
+          ))}
+        </div>
       ) : recentCustomers.length === 0 ? (
         <div style={{ padding: '32px 20px', textAlign: 'center', color: C.sub, fontSize: 13 }}>{emptyMsg}</div>
       ) : (
@@ -416,7 +424,9 @@ export default function Dashboard({ profile, onNavigate }) {
               <span style={{ fontSize: 13, color: C.sub, fontWeight: 500 }}>{title}</span>
             </div>
             <div style={{ fontSize: 32, fontWeight: 800, color: C.text, lineHeight: 1, marginBottom: 8 }}>
-              {loading ? '-' : stats[key]}
+              {loading
+                ? <span style={{ display: 'inline-block', height: 28, width: 56, borderRadius: 4, background: 'linear-gradient(90deg, var(--s3) 25%, var(--line) 50%, var(--s3) 75%)', backgroundSize: '400% 100%', animation: 'fundit-skeleton 1.4s ease infinite' }} />
+                : stats[key]}
             </div>
           </div>
         ))}
@@ -467,7 +477,15 @@ export default function Dashboard({ profile, onNavigate }) {
         <div style={{ flex: 1, minWidth: isMobile ? 0 : 220, background: C.s2, border: `1px solid ${C.line}`, borderRadius: 16, padding: '16px 20px' }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 16 }}>신청 현황 요약</div>
           {loading ? (
-            <div style={{ fontSize: 13, color: C.sub }}>불러오는 중...</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ display: 'block', width: 52, height: 18, borderRadius: 999, flexShrink: 0, background: 'linear-gradient(90deg, var(--s3) 25%, var(--line) 50%, var(--s3) 75%)', backgroundSize: '400% 100%', animation: 'fundit-skeleton 1.4s ease infinite' }} />
+                  <span style={{ display: 'block', flex: 1, height: 10, borderRadius: 4, background: 'linear-gradient(90deg, var(--s3) 25%, var(--line) 50%, var(--s3) 75%)', backgroundSize: '400% 100%', animation: 'fundit-skeleton 1.4s ease infinite' }} />
+                  <span style={{ display: 'block', width: 24, height: 10, borderRadius: 4, flexShrink: 0, background: 'linear-gradient(90deg, var(--s3) 25%, var(--line) 50%, var(--s3) 75%)', backgroundSize: '400% 100%', animation: 'fundit-skeleton 1.4s ease infinite' }} />
+                </div>
+              ))}
+            </div>
           ) : statusSummary.length === 0 ? (
             <div style={{ fontSize: 13, color: C.sub }}>신청건이 없어요</div>
           ) : (

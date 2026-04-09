@@ -144,6 +144,87 @@ export const Button = ({ children, onClick, variant = 'primary', disabled, style
   );
 };
 
+// TableSkeleton — 테이블 로딩 스켈레톤 (rows행 × cols열)
+// 컬럼 너비 패턴: 첫 열 넓게, 마지막 열 좁게, 나머지 중간
+export const TableSkeleton = ({ rows = 5, cols = 6 }) => {
+  const C = useT()
+  const shimmerBase = {
+    background: 'linear-gradient(90deg, var(--s3) 25%, var(--line) 50%, var(--s3) 75%)',
+    backgroundSize: '400% 100%',
+    animation: 'fundit-skeleton 1.4s ease infinite',
+    borderRadius: 4,
+    height: 13,
+    display: 'block',
+  }
+  const widths = ['72%', '58%', '50%', '44%', '38%', '32%', '28%']
+  return (
+    <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+      <tbody>
+        {Array.from({ length: rows }).map((_, i) => (
+          <tr key={i} style={{ borderBottom: `1px solid ${C.line}` }}>
+            {Array.from({ length: cols }).map((_, j) => (
+              <td key={j} style={{ padding: '12px 12px' }}>
+                <span style={{ ...shimmerBase, width: widths[j % widths.length] }} />
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+// CardSkeleton — KPI 카드 형태 스켈레톤 (count개)
+export const CardSkeleton = ({ count = 3 }) => {
+  const C = useT()
+  const shimmerBase = {
+    background: 'linear-gradient(90deg, var(--s3) 25%, var(--line) 50%, var(--s3) 75%)',
+    backgroundSize: '400% 100%',
+    animation: 'fundit-skeleton 1.4s ease infinite',
+    borderRadius: 4,
+    display: 'block',
+  }
+  return (
+    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} style={{
+          flex: 1, minWidth: 150,
+          background: C.s2, border: `1px solid ${C.line}`,
+          borderRadius: 14, padding: '16px 18px',
+          display: 'flex', flexDirection: 'column', gap: 14,
+        }}>
+          <span style={{ ...shimmerBase, height: 10, width: '55%' }} />
+          <span style={{ ...shimmerBase, height: 28, width: '40%' }} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// DetailSkeleton — 상세 패널 탭 콘텐츠 스켈레톤
+// 레이블+인풋 쌍으로 구성 (fieldCount개)
+export const DetailSkeleton = ({ fieldCount = 8 }) => {
+  const C = useT()
+  const shimmerBase = {
+    background: 'linear-gradient(90deg, var(--s3) 25%, var(--line) 50%, var(--s3) 75%)',
+    backgroundSize: '400% 100%',
+    animation: 'fundit-skeleton 1.4s ease infinite',
+    borderRadius: 4,
+    display: 'block',
+  }
+  const widths = ['80%', '65%', '90%', '55%', '70%', '75%', '60%', '85%']
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      {Array.from({ length: fieldCount }).map((_, i) => (
+        <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span style={{ ...shimmerBase, height: 9, width: '40%' }} />
+          <span style={{ ...shimmerBase, height: 32, width: widths[i % widths.length] }} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // BottomSheet — 모바일 슬라이드업 패널
 // open/onClose로 제어, title 선택, children은 스크롤 가능
 // 데스크탑에서는 렌더 안 됨 (호출 측에서 isMobile 조건으로 분기)

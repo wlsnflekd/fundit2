@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useT, useIsMobile } from '../theme.jsx'
-import { Button, BottomSheet } from './Common.jsx'
+import { Button, BottomSheet, TableSkeleton } from './Common.jsx'
 import CustomerDetailPanel, { STATUS_CONFIG } from './customers/CustomerDetailPanel.jsx'
 import { supabase, getCustomers, deleteCustomer, createCustomer, createAssignmentNotification } from '../supabase.js'
 
@@ -646,7 +646,21 @@ export default function Customers({ consultantFilter, profile }) {
       {isMobile ? (
         <div>
           {loading ? (
-            <div style={{ padding: 32, textAlign: 'center', color: C.sub }}>불러오는 중...</div>
+            <div style={{ padding: '8px 0' }}>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} style={{
+                  background: C.s2, border: `1px solid ${C.line}`,
+                  borderRadius: 12, padding: '14px 16px', marginBottom: 8,
+                  display: 'flex', flexDirection: 'column', gap: 10,
+                }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span style={{ display: 'block', width: 52, height: 18, borderRadius: 999, background: 'linear-gradient(90deg, var(--s3) 25%, var(--line) 50%, var(--s3) 75%)', backgroundSize: '400% 100%', animation: 'fundit-skeleton 1.4s ease infinite' }} />
+                    <span style={{ display: 'block', flex: 1, height: 14, borderRadius: 4, background: 'linear-gradient(90deg, var(--s3) 25%, var(--line) 50%, var(--s3) 75%)', backgroundSize: '400% 100%', animation: 'fundit-skeleton 1.4s ease infinite' }} />
+                  </div>
+                  <span style={{ display: 'block', width: '60%', height: 11, borderRadius: 4, background: 'linear-gradient(90deg, var(--s3) 25%, var(--line) 50%, var(--s3) 75%)', backgroundSize: '400% 100%', animation: 'fundit-skeleton 1.4s ease infinite' }} />
+                </div>
+              ))}
+            </div>
           ) : customers.length === 0 ? (
             <div style={{ padding: 32, textAlign: 'center', color: C.sub }}>검색 결과가 없습니다.</div>
           ) : (
@@ -658,7 +672,7 @@ export default function Customers({ consultantFilter, profile }) {
       ) : (
         <div style={{ background: C.s2, border: `1px solid ${C.line}`, borderRadius: 14, overflow: 'auto' }}>
           {loading ? (
-            <div style={{ padding: 32, textAlign: 'center', color: C.sub }}>불러오는 중...</div>
+            <TableSkeleton rows={8} cols={isAdmin ? 11 : 10} />
           ) : (
             <table style={{ width: '100%', minWidth: isAdmin ? 960 : 920, borderCollapse: 'collapse', tableLayout: 'fixed' }}>
               <colgroup>
