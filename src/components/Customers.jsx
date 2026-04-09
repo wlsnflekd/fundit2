@@ -269,8 +269,9 @@ export default function Customers({ consultantFilter, profile }) {
       .channel(`customers:${workspaceId}`)
       .on('postgres_changes', {
         event: 'INSERT', schema: 'public', table: 'customers',
-        filter: `workspace_id=eq.${workspaceId}`,
       }, (payload) => {
+        // 클라이언트에서 workspace 격리 (RLS가 서버 보안 담당, 여기서 이중 체크)
+        if (payload.new.workspace_id !== workspaceId) return
         setCustomers(prev => {
           // 이미 handleCreated()로 낙관적 추가된 row는 중복 방지
           if (prev.some(c => c.id === payload.new.id)) return prev
@@ -279,8 +280,8 @@ export default function Customers({ consultantFilter, profile }) {
       })
       .on('postgres_changes', {
         event: 'UPDATE', schema: 'public', table: 'customers',
-        filter: `workspace_id=eq.${workspaceId}`,
       }, (payload) => {
+        if (payload.new.workspace_id !== workspaceId) return
         const updated = payload.new
         setCustomers(prev => prev.map(c => {
           if (c.id !== updated.id) return c
@@ -310,15 +311,15 @@ export default function Customers({ consultantFilter, profile }) {
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           if (realtimeSubscribedRef.current) {
-            // 재연결 — 단절 중 누락된 변경사항 보완을 위해 전체 재로드
             console.debug('[Realtime] customers 재연결, 데이터 재로드')
             loadData()
           } else {
             realtimeSubscribedRef.current = true
-            console.debug('[Realtime] customers 구독 완료', workspaceId)
+            console.debug('[Realtime] customers 구독 완료')
           }
         }
-        if (status === 'CHANNEL_ERROR') console.warn('[Realtime] customers 구독 오류')
+        if (status === 'CHANNEL_ERROR') console.warn('[Realtime] customers 구독 오류 — Realtime 비활성화 상태로 동작')
+        if (status === 'TIMED_OUT') console.warn('[Realtime] customers 구독 타임아웃')
       })
 
     return () => supabase.removeChannel(ch)

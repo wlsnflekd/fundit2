@@ -382,15 +382,19 @@ function NotificationBell({ profile }) {
   // Supabase Realtime: notifications INSERT 시 벨 즉시 갱신
   useEffect(() => {
     if (!profile?.id) return
+    const userId = profile.id
     const ch = supabase
-      .channel(`bell:${profile.id}`)
+      .channel(`bell:${userId}`)
       .on('postgres_changes', {
         event: 'INSERT', schema: 'public', table: 'notifications',
-        filter: `user_id=eq.${profile.id}`,
-      }, () => loadNotifications())
+      }, (payload) => {
+        if (payload.new.user_id !== userId) return
+        loadNotifications()
+      })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') console.debug('[Realtime] 벨 알림 구독 완료')
         if (status === 'CHANNEL_ERROR') console.warn('[Realtime] 벨 알림 구독 오류')
+        if (status === 'TIMED_OUT') console.warn('[Realtime] 벨 알림 구독 타임아웃')
       })
     return () => supabase.removeChannel(ch)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -740,12 +744,13 @@ function MainApp({ profile, onLogout, rootTab, setRootTab }) {
   // Supabase Realtime: 새 알림 INSERT 시 즉시 팝업 + 띵동
   useEffect(() => {
     if (!profile?.id) return
+    const userId = profile.id
     const ch = supabase
-      .channel(`popup:${profile.id}`)
+      .channel(`popup:${userId}`)
       .on('postgres_changes', {
         event: 'INSERT', schema: 'public', table: 'notifications',
-        filter: `user_id=eq.${profile.id}`,
       }, (payload) => {
+        if (payload.new.user_id !== userId) return
         if (!payload.new.is_read) {
           setPopupQueue(prev => [...prev, payload.new])
         }
@@ -753,6 +758,7 @@ function MainApp({ profile, onLogout, rootTab, setRootTab }) {
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') console.debug('[Realtime] 팝업 알림 구독 완료')
         if (status === 'CHANNEL_ERROR') console.warn('[Realtime] 팝업 알림 구독 오류')
+        if (status === 'TIMED_OUT') console.warn('[Realtime] 팝업 알림 구독 타임아웃')
       })
     return () => supabase.removeChannel(ch)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
