@@ -271,11 +271,10 @@ export default function Customers({ consultantFilter, profile }) {
     let retryTimer = null
     let ch = null
 
-    const subscribe = async () => {
-      try {
-        const { data: { session: s } } = await supabase.auth.getSession()
-        if (s?.access_token) await supabase.realtime.setAuth(s.access_token)
-      } catch (e) { console.warn('[Realtime] setAuth 사전 호출 실패:', e) }
+    const subscribe = () => {
+      supabase.auth.getSession().then(({ data: { session: s } }) => {
+        if (s?.access_token) supabase.realtime.setAuth(s.access_token)
+      }).catch(() => {})
 
       ch = supabase
         .channel(`customers:${workspaceId}`)

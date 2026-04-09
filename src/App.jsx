@@ -735,21 +735,15 @@ function MainApp({ profile, onLogout, rootTab, setRootTab }) {
     let retryTimer = null
     let ch = null
 
-    const subscribe = async () => {
-      // Realtime 연결 전에 user JWT를 명시적으로 setAuth합니다.
-      // supabase-js 내부 _handleTokenChanged는 INITIAL_SESSION 이벤트를 처리하지 않아
-      // 페이지 새로고침 시 Realtime이 anon key로 인증을 시도할 수 있습니다.
-      // setAuth()를 먼저 await하면 소켓 handshake 전에 user JWT가 확실히 설정됩니다.
-      // 참고: SIGNED_IN/TOKEN_REFRESHED 이벤트 후 subscribe 호출 시는 이미 setAuth가
-      //       완료된 상태이므로 중복 호출이지만 무해합니다.
-      try {
-        const { data: { session: currentSession } } = await supabase.auth.getSession()
-        if (currentSession?.access_token) {
-          await supabase.realtime.setAuth(currentSession.access_token)
-        }
-      } catch (e) {
-        console.warn('[Realtime] setAuth 사전 호출 실패 (무시됨):', e)
-      }
+    const subscribe = () => {
+      // setAuth fire-and-forget: localStorage 읽기라 ~1ms 내 완료
+      // WebSocket 핸드셰이크는 ~100ms 걸리므로 phx_join 전에 JWT가 확실히 설정됨
+      // async/await 대신 fire-and-forget을 쓰는 이유:
+      //   async subscribe()는 React Strict Mode 이중 호출 시 race condition 발생 →
+      //   "cannot add postgres_changes callbacks after subscribe()" 오류
+      supabase.auth.getSession().then(({ data: { session: s } }) => {
+        if (s?.access_token) supabase.realtime.setAuth(s.access_token)
+      }).catch(() => {})
 
       ch = supabase
         .channel(`notifications:${userId}`)
