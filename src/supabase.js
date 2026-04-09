@@ -4,7 +4,18 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,   // JWT 만료 전 자동 갱신 — Realtime 연결 유지
+    persistSession: true,
+    detectSessionInUrl: true,
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10,    // Free Plan 제한 명시
+    },
+  },
+});
 
 // Auth 관련 헬퍼 함수들
 export const signUp = async (email, password, workspaceName, name) => {

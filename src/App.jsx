@@ -334,7 +334,7 @@ function relativeTime(dateStr) {
   return `${Math.floor(diff / 86400)}일 전`
 }
 
-function NotificationBell({ profile }) {
+function NotificationBell({ profile, notifRefreshSignal = 0 }) {
   const C = useT()
   const [open, setOpen] = useState(false)
   const [notifications, setNotifications] = useState([])
@@ -379,25 +379,10 @@ function NotificationBell({ profile }) {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [])
 
-  // Supabase Realtime: notifications INSERT 시 벨 즉시 갱신
+  // MainApp의 popup 구독이 새 알림을 받으면 notifRefreshSignal이 증가 → 목록 갱신
   useEffect(() => {
-    if (!profile?.id) return
-    const userId = profile.id
-    const ch = supabase
-      .channel(`bell:${userId}`)
-      .on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'notifications',
-      }, (payload) => {
-        if (payload.new.user_id !== userId) return
-        loadNotifications()
-      })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') console.debug('[Realtime] 벨 알림 구독 완료')
-        if (status === 'CHANNEL_ERROR') console.warn('[Realtime] 벨 알림 구독 오류')
-        if (status === 'TIMED_OUT') console.warn('[Realtime] 벨 알림 구독 타임아웃')
-      })
-    return () => supabase.removeChannel(ch)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    if (notifRefreshSignal > 0) loadNotifications()
+  }, [notifRefreshSignal]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 드롭다운 외부 클릭 시 닫기
   useEffect(() => {
@@ -692,6 +677,8 @@ function MainApp({ profile, onLogout, rootTab, setRootTab }) {
 
   // 알림 팝업 큐
   const [popupQueue, setPopupQueue] = useState([])
+  // bell 갱신 신호 (popup 구독에서 새 알림 수신 시 NotificationBell에 전달)
+  const [notifRefreshSignal, setNotifRefreshSignal] = useState(0)
 
   const handlePopupRead = async (id) => {
     await markNotificationRead(id)
@@ -741,26 +728,43 @@ function MainApp({ profile, onLogout, rootTab, setRootTab }) {
     return () => clearTimeout(timer)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Supabase Realtime: 새 알림 INSERT 시 즉시 팝업 + 띵동
+  // Supabase Realtime: 새 알림 INSERT 시 즉시 팝업 + bell 갱신 (단일 채널)
   useEffect(() => {
     if (!profile?.id) return
     const userId = profile.id
-    const ch = supabase
-      .channel(`popup:${userId}`)
-      .on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'notifications',
-      }, (payload) => {
-        if (payload.new.user_id !== userId) return
-        if (!payload.new.is_read) {
-          setPopupQueue(prev => [...prev, payload.new])
-        }
-      })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') console.debug('[Realtime] 팝업 알림 구독 완료')
-        if (status === 'CHANNEL_ERROR') console.warn('[Realtime] 팝업 알림 구독 오류')
-        if (status === 'TIMED_OUT') console.warn('[Realtime] 팝업 알림 구독 타임아웃')
-      })
-    return () => supabase.removeChannel(ch)
+    let retryTimer = null
+    let ch = null
+
+    const subscribe = () => {
+      ch = supabase
+        .channel(`notifications:${userId}`)
+        .on('postgres_changes', {
+          event: 'INSERT', schema: 'public', table: 'notifications',
+        }, (payload) => {
+          if (payload.new.user_id !== userId) return
+          if (!payload.new.is_read) {
+            setPopupQueue(prev => [...prev, payload.new])
+            setNotifRefreshSignal(prev => prev + 1)  // bell 즉시 갱신
+          }
+        })
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') console.debug('[Realtime] 알림 구독 완료')
+          if (status === 'CHANNEL_ERROR') {
+            console.warn('[Realtime] 알림 구독 오류 — 30초 후 재시도')
+            retryTimer = setTimeout(() => {
+              supabase.removeChannel(ch)
+              subscribe()
+            }, 30000)
+          }
+          if (status === 'TIMED_OUT') console.warn('[Realtime] 알림 구독 타임아웃')
+        })
+    }
+
+    subscribe()
+    return () => {
+      clearTimeout(retryTimer)
+      if (ch) supabase.removeChannel(ch)
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 앱 진입 직후 모든 lazy 컴포넌트를 백그라운드에서 미리 로드
@@ -1005,7 +1009,7 @@ function MainApp({ profile, onLogout, rootTab, setRootTab }) {
             </div>
           )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <NotificationBell profile={profile} />
+            <NotificationBell profile={profile} notifRefreshSignal={notifRefreshSignal} />
             {!isMobile && <div style={{ fontSize: 12, color: C.sub }}>{dateLabel}</div>}
           </div>
         </div>

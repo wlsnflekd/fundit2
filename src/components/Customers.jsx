@@ -265,7 +265,11 @@ export default function Customers({ consultantFilter, profile }) {
     const getMemberName = (consultantId) =>
       consultantsRef.current.find(m => m.id === consultantId)?.name || '-'
 
-    const ch = supabase
+    let retryTimer = null
+    let ch = null
+
+    const subscribe = () => {
+    ch = supabase
       .channel(`customers:${workspaceId}`)
       .on('postgres_changes', {
         event: 'INSERT', schema: 'public', table: 'customers',
@@ -318,11 +322,22 @@ export default function Customers({ consultantFilter, profile }) {
             console.debug('[Realtime] customers 구독 완료')
           }
         }
-        if (status === 'CHANNEL_ERROR') console.warn('[Realtime] customers 구독 오류 — Realtime 비활성화 상태로 동작')
+        if (status === 'CHANNEL_ERROR') {
+          console.warn('[Realtime] customers 구독 오류 — 30초 후 재시도')
+          retryTimer = setTimeout(() => {
+            supabase.removeChannel(ch)
+            subscribe()
+          }, 30000)
+        }
         if (status === 'TIMED_OUT') console.warn('[Realtime] customers 구독 타임아웃')
       })
+    } // end subscribe()
 
-    return () => supabase.removeChannel(ch)
+    subscribe()
+    return () => {
+      clearTimeout(retryTimer)
+      if (ch) supabase.removeChannel(ch)
+    }
   }, [profile]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 담당자 드롭다운 외부 클릭 시 닫기
