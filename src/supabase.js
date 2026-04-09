@@ -330,7 +330,7 @@ const SAFE_CUSTOMER_COLS = [
   'consultant', 'pool', 'tags', 'score', 'status', 'lead_source', 'phone',
   'business_type', 'business_reg_no', 'region', 'business_age',
   'received_date', 'birth_date', 'business_reg_date',
-  'contract_amount', 'commission_rate', 'consultation_memo',
+  'contract_amount', 'commission_rate', 'consultation_memo', 'quick_memo',
   'monthly_revenue', 'prev_year_revenue', 'prev2_year_revenue',
   'existing_loan', 'required_funds', 'kcb_score', 'nice_score',
   'tax_delinquent', 'overdue_history', 'rehabilitation', 'is_exporter',

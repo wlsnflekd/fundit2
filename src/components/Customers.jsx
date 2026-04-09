@@ -54,7 +54,16 @@ function CustomerMobileCard({ c, onSelect, C }) {
         <span>{c.industry || '-'}</span>
         <span style={{ marginLeft: 'auto' }}>담당: {c.consultantName || '미배분'}</span>
       </div>
-      {/* 3행: 태그 */}
+      {/* 3행: 간단메모 */}
+      {c.quick_memo && (
+        <div style={{
+          fontSize: 11, color: C.sub, marginTop: 4,
+          overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
+        }}>
+          {c.quick_memo}
+        </div>
+      )}
+      {/* 4행: 태그 */}
       {c.tags?.length > 0 && (
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
           {c.tags.slice(0, 2).map(tag => (
@@ -195,6 +204,12 @@ export default function Customers({ consultantFilter, profile }) {
   const [editingStatusId, setEditingStatusId] = useState(null)
   const [savingStatusId, setSavingStatusId] = useState(null)
   const statusSelectRef = useRef(null)
+  // 간단메모 인라인 편집
+  const [editingMemoId, setEditingMemoId] = useState(null)
+  const [memoValues, setMemoValues] = useState({})
+  const [savingMemoId, setSavingMemoId] = useState(null)
+  const [savedMemoId, setSavedMemoId] = useState(null)
+  const memoInputRef = useRef(null)
 
   const loadData = async () => {
     setLoading(true)
@@ -305,6 +320,31 @@ export default function Customers({ consultantFilter, profile }) {
       console.error('상태 변경 오류:', error)
     }
     setSavingStatusId(null)
+  }
+
+  const handleMemoSave = async (customerId, value) => {
+    const trimmed = (value || '').trim()
+    const current = (customers.find(c => c.id === customerId)?.quick_memo || '').trim()
+    setEditingMemoId(null)
+    if (trimmed === current) return
+    setSavingMemoId(customerId)
+    const { error } = await supabase
+      .from('customers')
+      .update({ quick_memo: trimmed || null })
+      .eq('id', customerId)
+    if (!error) {
+      setCustomers(prev => prev.map(c =>
+        c.id === customerId ? { ...c, quick_memo: trimmed || null } : c
+      ))
+      if (selected?.id === customerId) {
+        setSelected(prev => ({ ...prev, quick_memo: trimmed || null }))
+      }
+      setSavedMemoId(customerId)
+      setTimeout(() => setSavedMemoId(null), 1500)
+    } else {
+      console.error('간단메모 저장 오류:', error)
+    }
+    setSavingMemoId(null)
   }
 
   const filtered = customers.filter(c => {
@@ -470,28 +510,30 @@ export default function Customers({ consultantFilter, profile }) {
           {loading ? (
             <div style={{ padding: 32, textAlign: 'center', color: C.sub }}>불러오는 중...</div>
           ) : (
-            <table style={{ width: '100%', minWidth: 890, borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+            <table style={{ width: '100%', minWidth: isAdmin ? 960 : 920, borderCollapse: 'collapse', tableLayout: 'fixed' }}>
               <colgroup>
+                <col style={{ width: 70 }} />
+                <col style={{ width: 80 }} />
+                <col style={{ width: 130 }} />
                 <col style={{ width: 90 }} />
-                <col style={{ width: 90 }} />
-                <col style={{ width: 150 }} />
+                <col style={{ width: 110 }} />
                 <col style={{ width: 100 }} />
-                <col style={{ width: 120 }} />
-                <col style={{ width: 100 }} />
-                <col style={{ width: 100 }} />
-                <col style={{ width: 100 }} />
+                <col style={{ width: 80 }} />
+                <col style={{ width: 180 }} />
+                <col style={{ width: 80 }} />
                 {isAdmin && <col style={{ width: 40 }} />}
               </colgroup>
               <thead>
                 <tr style={{ background: C.s1 }}>
-                  <th style={{ ...th, width: 90, minWidth: 90 }}>상태</th>
-                  <th style={{ ...th, width: 90, minWidth: 90 }}>담당자</th>
-                  <th style={{ ...th, width: 150, minWidth: 150 }}>업체명</th>
-                  <th style={{ ...th, width: 100, minWidth: 100 }}>이름</th>
-                  <th style={{ ...th, width: 120, minWidth: 120 }}>연락처</th>
+                  <th style={{ ...th, width: 70, minWidth: 70 }}>상태</th>
+                  <th style={{ ...th, width: 80, minWidth: 80 }}>담당자</th>
+                  <th style={{ ...th, width: 130, minWidth: 130 }}>업체명</th>
+                  <th style={{ ...th, width: 90, minWidth: 90 }}>이름</th>
+                  <th style={{ ...th, width: 110, minWidth: 110 }}>연락처</th>
                   <th style={{ ...th, width: 100, minWidth: 100 }}>업종</th>
-                  <th style={{ ...th, width: 100, minWidth: 100 }}>유입경로</th>
-                  <th style={{ ...th, width: 100, minWidth: 100 }}>접수일</th>
+                  <th style={{ ...th, width: 80, minWidth: 80 }}>유입경로</th>
+                  <th style={{ ...th, width: 180, minWidth: 180 }}>빠른 메모</th>
+                  <th style={{ ...th, width: 80, minWidth: 80 }}>접수일</th>
                   {isAdmin && <th style={{ ...th, width: 40, minWidth: 40, textAlign: 'center' }}></th>}
                 </tr>
               </thead>
@@ -508,7 +550,7 @@ export default function Customers({ consultantFilter, profile }) {
                   >
                     {/* 상태 */}
                     <td
-                      style={{ ...td, width: 90, minWidth: 90, maxWidth: 90, cursor: 'pointer', position: 'relative' }}
+                      style={{ ...td, width: 70, minWidth: 70, maxWidth: 70, cursor: 'pointer', position: 'relative' }}
                       onClick={e => {
                         e.stopPropagation()
                         setEditingStatusId(c.id)
@@ -543,7 +585,7 @@ export default function Customers({ consultantFilter, profile }) {
                     </td>
                     {/* 담당자 */}
                     <td
-                      style={{ ...td, width: 90, minWidth: 90, maxWidth: 90, color: C.sub, cursor: 'pointer', position: 'relative' }}
+                      style={{ ...td, width: 80, minWidth: 80, maxWidth: 80, color: C.sub, cursor: 'pointer', position: 'relative' }}
                       onClick={e => {
                         e.stopPropagation()
                         setEditingConsultantId(c.id)
@@ -576,18 +618,18 @@ export default function Customers({ consultantFilter, profile }) {
                       )}
                     </td>
                     {/* 업체명 */}
-                    <td style={{ ...td, width: 150, minWidth: 150, maxWidth: 150 }}>
+                    <td style={{ ...td, width: 130, minWidth: 130, maxWidth: 130 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, overflow: 'hidden' }}>
                         <span title={c.company} style={{ fontWeight: 600, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', display: 'block', minWidth: 0, flex: 1 }}>{c.company}</span>
                         {c.pool && <span style={{ flexShrink: 0, fontSize: 10, padding: '1px 6px', borderRadius: 999, background: C.blue, color: C.base }}>풀</span>}
                       </div>
                     </td>
                     {/* 이름 */}
-                    <td style={{ ...td, width: 100, minWidth: 100, maxWidth: 100 }}>
+                    <td style={{ ...td, width: 90, minWidth: 90, maxWidth: 90 }}>
                       <span title={c.ceo || undefined} style={ellipsis}>{c.ceo || '-'}</span>
                     </td>
                     {/* 연락처 */}
-                    <td style={{ ...td, width: 120, minWidth: 120, maxWidth: 120, color: C.sub }}>
+                    <td style={{ ...td, width: 110, minWidth: 110, maxWidth: 110, color: C.sub }}>
                       <span title={c.phone || undefined} style={ellipsis}>{c.phone || '-'}</span>
                     </td>
                     {/* 업종 */}
@@ -595,11 +637,69 @@ export default function Customers({ consultantFilter, profile }) {
                       <span title={c.industry || undefined} style={ellipsis}>{c.industry || '-'}</span>
                     </td>
                     {/* 유입경로 */}
-                    <td style={{ ...td, width: 100, minWidth: 100, maxWidth: 100, color: C.sub }}>
+                    <td style={{ ...td, width: 80, minWidth: 80, maxWidth: 80, color: C.sub }}>
                       <span title={c.lead_source || undefined} style={ellipsis}>{c.lead_source || '-'}</span>
                     </td>
+                    {/* 간단메모 */}
+                    <td
+                      style={{ ...td, width: 180, minWidth: 180, maxWidth: 180, cursor: 'text', position: 'relative' }}
+                      onClick={e => {
+                        e.stopPropagation()
+                        if (editingMemoId !== c.id) {
+                          setMemoValues(prev => ({ ...prev, [c.id]: c.quick_memo || '' }))
+                          setEditingMemoId(c.id)
+                        }
+                      }}
+                    >
+                      {savingMemoId === c.id ? (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ ...ellipsis, fontSize: 12, color: C.sub, flex: 1 }}>{c.quick_memo || ''}</span>
+                          <span style={{ fontSize: 10, color: C.gold, flexShrink: 0 }}>저장 중</span>
+                        </span>
+                      ) : editingMemoId === c.id ? (
+                        <input
+                          ref={memoInputRef}
+                          autoFocus
+                          maxLength={80}
+                          value={memoValues[c.id] ?? ''}
+                          onChange={e => setMemoValues(prev => ({ ...prev, [c.id]: e.target.value }))}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') { e.preventDefault(); handleMemoSave(c.id, memoValues[c.id] ?? '') }
+                            if (e.key === 'Escape') { e.stopPropagation(); setEditingMemoId(null) }
+                          }}
+                          onBlur={() => handleMemoSave(c.id, memoValues[c.id] ?? '')}
+                          onClick={e => e.stopPropagation()}
+                          onMouseDown={e => e.stopPropagation()}
+                          placeholder="빠른 메모 입력..."
+                          style={{
+                            width: '100%', boxSizing: 'border-box',
+                            padding: '3px 6px', borderRadius: 5, outline: 'none',
+                            background: C.s3, border: `1px solid ${C.gold}`,
+                            color: C.text, fontSize: 12,
+                          }}
+                        />
+                      ) : (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span
+                            title={c.quick_memo?.trim() || undefined}
+                            style={{
+                              ...ellipsis, flex: 1,
+                              color: c.quick_memo?.trim() ? C.text : C.sub,
+                              fontSize: 12,
+                              borderBottom: `1px dashed ${C.line}`,
+                              paddingBottom: 1,
+                            }}
+                          >
+                            {c.quick_memo?.trim() || '-'}
+                          </span>
+                          {savedMemoId === c.id && (
+                            <span style={{ fontSize: 11, color: C.green, flexShrink: 0, animation: 'none' }}>✓</span>
+                          )}
+                        </span>
+                      )}
+                    </td>
                     {/* 접수일 */}
-                    <td style={{ ...td, width: 100, minWidth: 100, maxWidth: 100, color: C.sub }}>
+                    <td style={{ ...td, width: 80, minWidth: 80, maxWidth: 80, color: C.sub }}>
                       <span title={c.received_date || undefined} style={ellipsis}>{c.received_date || '-'}</span>
                     </td>
                     {/* 삭제버튼 */}
