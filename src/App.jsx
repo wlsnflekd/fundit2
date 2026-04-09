@@ -381,13 +381,17 @@ function NotificationBell({ profile }) {
 
   // Supabase Realtime: notifications INSERT 시 벨 즉시 갱신
   useEffect(() => {
+    if (!profile?.id) return
     const ch = supabase
-      .channel(`bell:${profile?.id}`)
+      .channel(`bell:${profile.id}`)
       .on('postgres_changes', {
         event: 'INSERT', schema: 'public', table: 'notifications',
-        filter: `user_id=eq.${profile?.id}`,
+        filter: `user_id=eq.${profile.id}`,
       }, () => loadNotifications())
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') console.debug('[Realtime] 벨 알림 구독 완료')
+        if (status === 'CHANNEL_ERROR') console.warn('[Realtime] 벨 알림 구독 오류')
+      })
     return () => supabase.removeChannel(ch)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -746,7 +750,10 @@ function MainApp({ profile, onLogout, rootTab, setRootTab }) {
           setPopupQueue(prev => [...prev, payload.new])
         }
       })
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') console.debug('[Realtime] 팝업 알림 구독 완료')
+        if (status === 'CHANNEL_ERROR') console.warn('[Realtime] 팝업 알림 구독 오류')
+      })
     return () => supabase.removeChannel(ch)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 

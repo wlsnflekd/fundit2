@@ -196,6 +196,10 @@ export default function Customers({ consultantFilter, profile }) {
   const [showRegister, setShowRegister] = useState(false)
   const [colorRows, setColorRows] = useState(true)
   const [hoveredId, setHoveredId] = useState(null)
+  // consultants 최신값을 Realtime 핸들러에서 참조하기 위한 ref
+  const consultantsRef = useRef([])
+  useEffect(() => { consultantsRef.current = consultants }, [consultants])
+
   // 담당자 인라인 편집
   const [editingConsultantId, setEditingConsultantId] = useState(null)
   const [savingConsultantId, setSavingConsultantId] = useState(null)
@@ -210,6 +214,16 @@ export default function Customers({ consultantFilter, profile }) {
   const [savingMemoId, setSavingMemoId] = useState(null)
   const [savedMemoId, setSavedMemoId] = useState(null)
   const memoInputRef = useRef(null)
+
+  // Realtime UPDATE 핸들러에서 편집 중 필드를 보호하기 위한 refs
+  const editingMemoIdRef = useRef(null)
+  const editingStatusIdRef = useRef(null)
+  const editingConsultantIdRef = useRef(null)
+  useEffect(() => { editingMemoIdRef.current = editingMemoId }, [editingMemoId])
+  useEffect(() => { editingStatusIdRef.current = editingStatusId }, [editingStatusId])
+  useEffect(() => { editingConsultantIdRef.current = editingConsultantId }, [editingConsultantId])
+  // 재연결 감지용 ref
+  const realtimeSubscribedRef = useRef(false)
 
   const loadData = async () => {
     setLoading(true)
@@ -242,6 +256,73 @@ export default function Customers({ consultantFilter, profile }) {
   }
 
   useEffect(() => { loadData() }, [])
+
+  // ── customers 테이블 Realtime 구독 ───────────────────────────────────────────
+  useEffect(() => {
+    const workspaceId = profile?.workspace?.id || profile?.workspace_id
+    if (!workspaceId) return
+
+    const getMemberName = (consultantId) =>
+      consultantsRef.current.find(m => m.id === consultantId)?.name || '-'
+
+    const ch = supabase
+      .channel(`customers:${workspaceId}`)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'customers',
+        filter: `workspace_id=eq.${workspaceId}`,
+      }, (payload) => {
+        setCustomers(prev => {
+          // 이미 handleCreated()로 낙관적 추가된 row는 중복 방지
+          if (prev.some(c => c.id === payload.new.id)) return prev
+          return [{ ...payload.new, consultantName: getMemberName(payload.new.consultant) }, ...prev]
+        })
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'customers',
+        filter: `workspace_id=eq.${workspaceId}`,
+      }, (payload) => {
+        const updated = payload.new
+        setCustomers(prev => prev.map(c => {
+          if (c.id !== updated.id) return c
+          const merged = { ...c, ...updated, consultantName: getMemberName(updated.consultant) }
+          // 현재 인라인 편집 중인 필드는 Realtime 덮어쓰기 방지
+          if (editingMemoIdRef.current === updated.id) merged.quick_memo = c.quick_memo
+          if (editingStatusIdRef.current === updated.id) merged.status = c.status
+          if (editingConsultantIdRef.current === updated.id) {
+            merged.consultant = c.consultant
+            merged.consultantName = c.consultantName
+          }
+          return merged
+        }))
+        // 열린 상세 패널 row도 갱신 (편집 중이 아닌 필드만)
+        setSelected(prev => {
+          if (prev?.id !== updated.id) return prev
+          const merged = { ...prev, ...updated, consultantName: getMemberName(updated.consultant) }
+          if (editingMemoIdRef.current === updated.id) merged.quick_memo = prev.quick_memo
+          if (editingStatusIdRef.current === updated.id) merged.status = prev.status
+          if (editingConsultantIdRef.current === updated.id) {
+            merged.consultant = prev.consultant
+            merged.consultantName = prev.consultantName
+          }
+          return merged
+        })
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          if (realtimeSubscribedRef.current) {
+            // 재연결 — 단절 중 누락된 변경사항 보완을 위해 전체 재로드
+            console.debug('[Realtime] customers 재연결, 데이터 재로드')
+            loadData()
+          } else {
+            realtimeSubscribedRef.current = true
+            console.debug('[Realtime] customers 구독 완료', workspaceId)
+          }
+        }
+        if (status === 'CHANNEL_ERROR') console.warn('[Realtime] customers 구독 오류')
+      })
+
+    return () => supabase.removeChannel(ch)
+  }, [profile]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 담당자 드롭다운 외부 클릭 시 닫기
   useEffect(() => {
