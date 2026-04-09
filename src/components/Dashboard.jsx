@@ -389,8 +389,12 @@ function BizInfoSection({ C, isMobile }) {
 
     const url = `/api/bizinfo?tab=${encodeURIComponent(activeTab)}&pageUnit=10`
     fetch(url)
-      .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      .then(async r => {
+        if (!r.ok) {
+          let detail = ''
+          try { detail = (await r.json()).error || '' } catch { /* ignore */ }
+          throw new Error(detail || `HTTP ${r.status}`)
+        }
         return r.json()
       })
       .then(data => {
@@ -399,8 +403,11 @@ function BizInfoSection({ C, isMobile }) {
         setItems(list)
       })
       .catch(err => {
-        setError('공지사항을 불러오지 못했습니다.')
-        console.error('[BizInfo]', err)
+        const msg = err.message.includes('BIZINFO_API_KEY')
+          ? 'API 키가 설정되지 않았습니다. Vercel 환경변수를 확인하세요.'
+          : '공지사항을 불러오지 못했습니다.'
+        setError(msg)
+        console.error('[BizInfo]', err.message)
       })
       .finally(() => setLoading(false))
   }, [activeTab])
