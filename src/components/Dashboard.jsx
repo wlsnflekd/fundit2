@@ -344,14 +344,21 @@ const CACHE_TTL = 5 * 60 * 1000
 
 const BIZINFO_TABS = ['전체', '소진공', '중진공', '소상공인', '중소기업']
 
-// API jrsdInsttNm 값 기준 클라이언트 사이드 필터
-// API 파라미터 필터가 동작하지 않는 경우를 대비한 이중 보완
+// 실데이터 기준 클라이언트 사이드 필터
+// jrsdInsttNm은 지자체명("경기도" 등)이라 기관 구분 불가 → excInsttNm 우선 사용
+// 소상공인/중소기업 탭은 trgetNm(지원대상) 필드 기준
 const BIZINFO_TAB_FILTER = {
-  '전체':   () => true,
-  '소진공': item => (item.jrsdInsttNm || item.excInsttNm || '').includes('소상공인시장진흥공단'),
-  '중진공': item => (item.jrsdInsttNm || item.excInsttNm || '').includes('중소벤처기업진흥공단'),
-  '소상공인': item => (item.jrsdInsttNm || item.excInsttNm || '').includes('소상공인'),
-  '중소기업': item => (item.jrsdInsttNm || item.excInsttNm || '').includes('중소기업'),
+  '전체':    () => true,
+  '소진공':  item => {
+    const nm = `${item.excInsttNm || ''}${item.jrsdInsttNm || ''}`
+    return nm.includes('소진공') || nm.includes('소상공인시장진흥공단')
+  },
+  '중진공':  item => {
+    const nm = `${item.excInsttNm || ''}${item.jrsdInsttNm || ''}`
+    return nm.includes('중진공') || nm.includes('중소벤처기업진흥공단')
+  },
+  '소상공인': item => (item.trgetNm || '').includes('소상공인'),
+  '중소기업': item => (item.trgetNm || '').includes('중소기업'),
 }
 
 // reqstBeginEndDe 포맷: "20260101 ~ 20260331" 또는 "2026-01-01 ~ 2026-03-31"
@@ -408,11 +415,6 @@ function BizInfoSection({ C, isMobile }) {
       })
       .then(data => {
         const list = data?.jsonArray ?? []
-        // TODO-debug: 실제 기관명 필드값 확인용 — 필터 검증 후 제거
-        if (list.length > 0) {
-          console.log('[BizInfo] 기관명 샘플:', [...new Set(list.map(i => i.jrsdInsttNm || i.excInsttNm || '(없음)'))].slice(0, 20))
-          console.log('[BizInfo] 첫 번째 항목 전체 키:', Object.keys(list[0]))
-        }
         bizInfoCache['전체'] = { data: list, ts: Date.now() }
         setAllItems(list)
       })
