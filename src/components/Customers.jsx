@@ -196,9 +196,25 @@ export default function Customers({ consultantFilter, profile }) {
   const [showRegister, setShowRegister] = useState(false)
   const [colorRows, setColorRows] = useState(true)
   const [hoveredId, setHoveredId] = useState(null)
+  // 페이지네이션
+  const PAGE_SIZE = 50
+  const [page, setPage] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
+  const [exporting, setExporting] = useState(false)
+
   // consultants 최신값을 Realtime 핸들러에서 참조하기 위한 ref
   const consultantsRef = useRef([])
   useEffect(() => { consultantsRef.current = consultants }, [consultants])
+
+  // 필터/검색/페이지 최신값을 loadData 클로저에서 참조하기 위한 ref
+  const filterRef = useRef(filter)
+  const searchRef = useRef(search)
+  const consultantFilterRef = useRef(consultantFilter)
+  const pageRef = useRef(page)
+  useEffect(() => { filterRef.current = filter }, [filter])
+  useEffect(() => { searchRef.current = search }, [search])
+  useEffect(() => { consultantFilterRef.current = consultantFilter }, [consultantFilter])
+  useEffect(() => { pageRef.current = page }, [page])
 
   // 담당자 인라인 편집
   const [editingConsultantId, setEditingConsultantId] = useState(null)
@@ -229,7 +245,13 @@ export default function Customers({ consultantFilter, profile }) {
     setLoading(true)
     try {
       const [custRes, membersRes] = await Promise.all([
-        getCustomers(),
+        getCustomers({
+          page: pageRef.current,
+          pageSize: PAGE_SIZE,
+          status: filterRef.current,
+          search: searchRef.current,
+          consultantId: consultantFilterRef.current,
+        }),
         supabase.from('profiles').select('id, name, role, created_at').eq('approval_status', 'approved'),
       ])
       if (custRes.error) console.error('getCustomers error:', custRes.error)
@@ -247,6 +269,7 @@ export default function Customers({ consultantFilter, profile }) {
         consultantName: memberMap[c.consultant] || '-',
       }))
       setCustomers(enriched)
+      setTotalCount(custRes.count ?? 0)
       setConsultants(sortedMembers)
     } catch (err) {
       console.error('loadData exception:', err)
@@ -255,7 +278,7 @@ export default function Customers({ consultantFilter, profile }) {
     }
   }
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => { loadData() }, [filter, search, consultantFilter, page])
 
   // ── customers 테이블 Realtime 구독 ───────────────────────────────────────────
   // 의존성을 profile 객체 전체가 아닌 workspaceId 문자열로 고정:
@@ -282,10 +305,7 @@ export default function Customers({ consultantFilter, profile }) {
           event: 'INSERT', schema: 'public', table: 'customers',
         }, (payload) => {
           if (payload.new.workspace_id !== workspaceId) return
-          setCustomers(prev => {
-            if (prev.some(c => c.id === payload.new.id)) return prev
-            return [{ ...payload.new, consultantName: getMemberName(payload.new.consultant) }, ...prev]
-          })
+          loadData()
         })
         .on('postgres_changes', {
           event: 'UPDATE', schema: 'public', table: 'customers',
@@ -447,18 +467,6 @@ export default function Customers({ consultantFilter, profile }) {
     setSavingMemoId(null)
   }
 
-  const filtered = customers.filter(c => {
-    const matchStatus = filter === '전체' || c.status === filter
-    const q = search.toLowerCase()
-    const matchSearch = !search ||
-      (c.company || '').toLowerCase().includes(q) ||
-      (c.ceo || '').toLowerCase().includes(q) ||
-      (c.industry || '').toLowerCase().includes(q) ||
-      (c.phone || '').includes(search)
-    const matchConsultant = !consultantFilter || c.consultant === consultantFilter
-    return matchStatus && matchSearch && matchConsultant
-  })
-
   const th = { textAlign: 'left', padding: '8px 12px', color: C.sub, fontSize: 11, fontWeight: 700, borderBottom: `1px solid ${C.line}`, whiteSpace: 'nowrap', letterSpacing: '0.04em' }
   const td = { padding: '10px 12px', color: C.text, fontSize: 13, borderBottom: `1px solid ${C.line}`, whiteSpace: 'nowrap' }
 
@@ -479,11 +487,10 @@ export default function Customers({ consultantFilter, profile }) {
     setSelected(enriched)
   }
 
-  const handleCreated = (newCustomer) => {
-    const memberMap = {}
-    consultants.forEach(m => { memberMap[m.id] = m.name })
-    const enriched = { ...newCustomer, consultantName: memberMap[newCustomer.consultant] || '-' }
-    setCustomers(prev => [enriched, ...prev])
+  const handleCreated = () => {
+    setPage(1)
+    // page가 이미 1이면 useEffect가 트리거되지 않으므로 직접 재조회
+    if (pageRef.current === 1) loadData()
   }
 
   const [deleteConfirm, setDeleteConfirm] = useState(null) // { id, company }
@@ -521,30 +528,44 @@ export default function Customers({ consultantFilter, profile }) {
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'superadmin'
 
-  const handleExportCSV = () => {
-    if (filtered.length === 0) {
-      alert('내보낼 고객사가 없습니다.')
-      return
+  const handleExportCSV = async () => {
+    setExporting(true)
+    try {
+      const { data, error } = await getCustomers({
+        pageSize: 0,
+        status: filterRef.current,
+        search: searchRef.current,
+        consultantId: consultantFilterRef.current,
+      })
+      if (error || !data?.length) {
+        alert('내보낼 고객사가 없습니다.')
+        return
+      }
+      const memberMap = {}
+      consultants.forEach(m => { memberMap[m.id] = m.name })
+      const allFiltered = data.map(c => ({ ...c, consultantName: memberMap[c.consultant] || '-' }))
+      const headers = ['고객번호', '업체명', '대표자명', '연락처', '업종', '지역', '유입경로', '상태', '담당자', '접수일']
+      const fields = ['id', 'company', 'ceo', 'phone', 'industry', 'region', 'lead_source', 'status', 'consultantName', 'received_date']
+      const escape = (val) => {
+        const s = val == null ? '' : String(val)
+        return s.includes(',') || s.includes('\n') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s
+      }
+      const rows = [headers.join(',')]
+      allFiltered.forEach(c => {
+        rows.push(fields.map(f => escape(c[f])).join(','))
+      })
+      const csv = '\uFEFF' + rows.join('\n')
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const today = new Date().toISOString().slice(0, 10)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `FUNDIT_고객목록_${today}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExporting(false)
     }
-    const headers = ['고객번호', '업체명', '대표자명', '연락처', '업종', '지역', '유입경로', '상태', '담당자', '접수일']
-    const fields = ['id', 'company', 'ceo', 'phone', 'industry', 'region', 'lead_source', 'status', 'consultantName', 'received_date']
-    const escape = (val) => {
-      const s = val == null ? '' : String(val)
-      return s.includes(',') || s.includes('\n') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s
-    }
-    const rows = [headers.join(',')]
-    filtered.forEach(c => {
-      rows.push(fields.map(f => escape(c[f])).join(','))
-    })
-    const csv = '\uFEFF' + rows.join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const today = new Date().toISOString().slice(0, 10)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `FUNDIT_고객목록_${today}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
   }
 
   return (
@@ -552,7 +573,7 @@ export default function Customers({ consultantFilter, profile }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h3 style={{ margin: 0, color: C.text }}>{consultantFilter ? '내 고객사' : '고객사 관리'}</h3>
         <div style={{ display: 'flex', gap: 8 }}>
-          {!isMobile && <Button variant="secondary" onClick={handleExportCSV}>내보내기</Button>}
+          {!isMobile && <Button variant="secondary" onClick={handleExportCSV} disabled={exporting}>{exporting ? '내보내는 중...' : '내보내기'}</Button>}
           <Button variant="primary" onClick={() => setShowRegister(true)}>+ 고객사 등록</Button>
         </div>
       </div>
@@ -567,7 +588,7 @@ export default function Customers({ consultantFilter, profile }) {
         paddingBottom: isMobile ? 4 : 0,
       }}>
         {STATUS_FILTERS.map(s => (
-          <button key={s} onClick={() => setFilter(s)} style={{
+          <button key={s} onClick={() => { setFilter(s); setPage(1) }} style={{
             padding: '3px 10px', borderRadius: 999, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700,
             flexShrink: 0,
             background: filter === s ? C.gold : C.s3,
@@ -586,7 +607,7 @@ export default function Customers({ consultantFilter, profile }) {
               />
               <span style={{ fontSize: 11, color: C.sub, whiteSpace: 'nowrap' }}>상태 색상</span>
             </label>
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="업체명·이름·연락처 검색"
+            <input value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} placeholder="업체명·이름·연락처 검색"
               style={{ padding: '4px 12px', borderRadius: 8, border: `1px solid ${C.line}`, background: C.s3, color: C.text, fontSize: 12, width: 180, outline: 'none' }} />
           </div>
         )}
@@ -596,7 +617,7 @@ export default function Customers({ consultantFilter, profile }) {
         <>
           <input
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setPage(1) }}
             placeholder="업체명·이름·연락처 검색"
             style={{
               display: 'block', width: '100%', boxSizing: 'border-box',
@@ -626,10 +647,10 @@ export default function Customers({ consultantFilter, profile }) {
         <div>
           {loading ? (
             <div style={{ padding: 32, textAlign: 'center', color: C.sub }}>불러오는 중...</div>
-          ) : filtered.length === 0 ? (
+          ) : customers.length === 0 ? (
             <div style={{ padding: 32, textAlign: 'center', color: C.sub }}>검색 결과가 없습니다.</div>
           ) : (
-            filtered.map(c => (
+            customers.map(c => (
               <CustomerMobileCard key={c.id} c={c} onSelect={setSelected} C={C} />
             ))
           )}
@@ -667,7 +688,7 @@ export default function Customers({ consultantFilter, profile }) {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(c => {
+                {customers.map(c => {
                   const ellipsis = { overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', display: 'block' }
                   return (
                   <tr
@@ -853,12 +874,45 @@ export default function Customers({ consultantFilter, profile }) {
               </tbody>
             </table>
           )}
-          {!loading && filtered.length === 0 && (
+          {!loading && customers.length === 0 && (
             <div style={{ padding: 32, textAlign: 'center', color: C.sub }}>검색 결과가 없습니다.</div>
           )}
         </div>
       )}
-      <div style={{ marginTop: 8, color: C.sub, fontSize: 12 }}>총 {filtered.length}개 고객사</div>
+      {/* 페이지네이션 */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, flexWrap: 'wrap', gap: 8 }}>
+        <span style={{ fontSize: 12, color: C.sub }}>
+          총 {totalCount}개 고객사
+          {totalCount > 0 && ` · ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, totalCount)}번째 표시 중`}
+        </span>
+        {totalCount > PAGE_SIZE && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1 || loading}
+              style={{
+                padding: '4px 12px', borderRadius: 6, border: `1px solid ${C.line}`,
+                background: C.s3, color: page === 1 ? C.sub : C.text,
+                cursor: page === 1 ? 'not-allowed' : 'pointer',
+                fontSize: 12, opacity: page === 1 ? 0.5 : 1,
+              }}
+            >이전</button>
+            <span style={{ fontSize: 12, color: C.sub, minWidth: 80, textAlign: 'center' }}>
+              {page} / {Math.ceil(totalCount / PAGE_SIZE)} 페이지
+            </span>
+            <button
+              onClick={() => setPage(p => Math.min(Math.ceil(totalCount / PAGE_SIZE), p + 1))}
+              disabled={page >= Math.ceil(totalCount / PAGE_SIZE) || loading}
+              style={{
+                padding: '4px 12px', borderRadius: 6, border: `1px solid ${C.line}`,
+                background: C.s3, color: page >= Math.ceil(totalCount / PAGE_SIZE) ? C.sub : C.text,
+                cursor: page >= Math.ceil(totalCount / PAGE_SIZE) ? 'not-allowed' : 'pointer',
+                fontSize: 12, opacity: page >= Math.ceil(totalCount / PAGE_SIZE) ? 0.5 : 1,
+              }}
+            >다음</button>
+          </div>
+        )}
+      </div>
 
       {showRegister && (
         <CustomerRegisterPanel

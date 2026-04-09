@@ -370,15 +370,45 @@ const SAFE_CUSTOMER_COLS = [
   'created_at',
 ].join(', ')
 
-// workspace 내 고객사 전체 조회 (RLS로 tenant 격리, 민감 컬럼 제외)
+// workspace 내 고객사 페이지네이션 조회 (RLS로 tenant 격리, 민감 컬럼 제외)
 // 정렬: 1차 received_date 내림차순 (null 후순위), 2차 created_at 내림차순
-export const getCustomers = async () => {
-  const { data, error } = await supabase
+// 기존 호출부는 Customers.jsx에서 수정 필요 (인자 없는 호출 → 기본값 적용되나 count 반환 구조 달라짐)
+export const getCustomers = async ({
+  page = 1,
+  pageSize = 50,
+  status,       // '전체' 또는 undefined → 필터 안 함
+  search,       // 문자열 → company/ceo/industry/phone ilike 검색
+  consultantId  // uuid → 담당자 필터
+} = {}) => {
+  let query = supabase
     .from('customers')
-    .select(SAFE_CUSTOMER_COLS)
+    .select(SAFE_CUSTOMER_COLS, { count: 'exact' })
     .order('received_date', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
-  return { data, error }
+
+  if (status && status !== '전체') {
+    query = query.eq('status', status)
+  }
+
+  if (search) {
+    query = query.or(
+      `company.ilike.%${search}%,ceo.ilike.%${search}%,industry.ilike.%${search}%,phone.ilike.%${search}%`
+    )
+  }
+
+  if (consultantId) {
+    query = query.eq('consultant', consultantId)
+  }
+
+  // pageSize = 0 이면 range 미적용 (CSV 내보내기용 전건 조회)
+  if (pageSize > 0) {
+    const from = (page - 1) * pageSize
+    const to = page * pageSize - 1
+    query = query.range(from, to)
+  }
+
+  const { data, count, error } = await query
+  return { data, count, error }
 }
 
 // 고객사 삭제 (admin 전용 — 연관 applications cascade 삭제됨)
