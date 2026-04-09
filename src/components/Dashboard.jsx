@@ -344,6 +344,16 @@ const CACHE_TTL = 5 * 60 * 1000
 
 const BIZINFO_TABS = ['전체', '소진공', '중진공', '소상공인', '중소기업']
 
+// API jrsdInsttNm 값 기준 클라이언트 사이드 필터
+// API 파라미터 필터가 동작하지 않는 경우를 대비한 이중 보완
+const BIZINFO_TAB_FILTER = {
+  '전체':   () => true,
+  '소진공': item => (item.jrsdInsttNm || item.excInsttNm || '').includes('소상공인시장진흥공단'),
+  '중진공': item => (item.jrsdInsttNm || item.excInsttNm || '').includes('중소벤처기업진흥공단'),
+  '소상공인': item => (item.jrsdInsttNm || item.excInsttNm || '').includes('소상공인'),
+  '중소기업': item => (item.jrsdInsttNm || item.excInsttNm || '').includes('중소기업'),
+}
+
 // reqstBeginEndDe 포맷: "20260101 ~ 20260331" 또는 "2026-01-01 ~ 2026-03-31"
 // 마감일(끝 날짜)을 기준으로 D-Day 계산
 function parseDday(reqstBeginEndDe) {
@@ -371,24 +381,23 @@ function getDdayBadge(dday) {
 
 function BizInfoSection({ C, isMobile }) {
   const [activeTab, setActiveTab] = useState('전체')
-  const [items, setItems] = useState([])
+  const [allItems, setAllItems] = useState([])  // 전체 원본 데이터
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // 전체 데이터를 1회 fetch → 클라이언트 필터로 탭 전환 (API 필터 미작동 대비)
   useEffect(() => {
-    const cacheKey = activeTab
-    const cached = bizInfoCache[cacheKey]
+    const cached = bizInfoCache['전체']
     if (cached && Date.now() - cached.ts < CACHE_TTL) {
-      setItems(cached.data)
+      setAllItems(cached.data)
       return
     }
 
     setLoading(true)
     setError('')
-    setItems([])
+    setAllItems([])
 
-    const url = `/api/bizinfo?tab=${encodeURIComponent(activeTab)}&pageUnit=10`
-    fetch(url)
+    fetch('/api/bizinfo?tab=%EC%A0%84%EC%B2%B4&pageUnit=50')
       .then(async r => {
         if (!r.ok) {
           let detail = ''
@@ -399,8 +408,8 @@ function BizInfoSection({ C, isMobile }) {
       })
       .then(data => {
         const list = data?.jsonArray ?? []
-        bizInfoCache[cacheKey] = { data: list, ts: Date.now() }
-        setItems(list)
+        bizInfoCache['전체'] = { data: list, ts: Date.now() }
+        setAllItems(list)
       })
       .catch(err => {
         const msg = err.message.includes('BIZINFO_API_KEY')
@@ -410,7 +419,10 @@ function BizInfoSection({ C, isMobile }) {
         console.error('[BizInfo]', err.message)
       })
       .finally(() => setLoading(false))
-  }, [activeTab])
+  }, [])  // 마운트 시 1회만 fetch
+
+  // 클라이언트 사이드 필터 적용 — 탭 전환 시 즉시 반영 (API 재호출 없음)
+  const items = allItems.filter(BIZINFO_TAB_FILTER[activeTab] ?? (() => true))
 
   return (
     <div style={{ marginTop: 20 }}>
@@ -463,7 +475,9 @@ function BizInfoSection({ C, isMobile }) {
         ) : error ? (
           <div style={{ padding: '24px 18px', textAlign: 'center', color: C.sub, fontSize: 13 }}>{error}</div>
         ) : items.length === 0 ? (
-          <div style={{ padding: '24px 18px', textAlign: 'center', color: C.sub, fontSize: 13 }}>해당 기관 공지사항이 없습니다.</div>
+          <div style={{ padding: '24px 18px', textAlign: 'center', color: C.sub, fontSize: 13 }}>
+            {activeTab === '전체' ? '공지사항이 없습니다.' : `${activeTab} 관련 공지사항이 없습니다.`}
+          </div>
         ) : (
           items.map((item, idx) => {
             const dday = parseDday(item.reqstBeginEndDe)
