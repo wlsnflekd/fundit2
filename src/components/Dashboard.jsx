@@ -408,6 +408,11 @@ function BizInfoSection({ C, isMobile }) {
       })
       .then(data => {
         const list = data?.jsonArray ?? []
+        // TODO-debug: 실제 기관명 필드값 확인용 — 필터 검증 후 제거
+        if (list.length > 0) {
+          console.log('[BizInfo] 기관명 샘플:', [...new Set(list.map(i => i.jrsdInsttNm || i.excInsttNm || '(없음)'))].slice(0, 20))
+          console.log('[BizInfo] 첫 번째 항목 전체 키:', Object.keys(list[0]))
+        }
         bizInfoCache['전체'] = { data: list, ts: Date.now() }
         setAllItems(list)
       })
