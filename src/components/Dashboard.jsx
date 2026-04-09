@@ -344,6 +344,31 @@ const CACHE_TTL = 5 * 60 * 1000
 
 const BIZINFO_TABS = ['전체', '소진공', '중진공', '소상공인', '중소기업']
 
+// reqstBeginEndDe 포맷: "20260101 ~ 20260331" 또는 "2026-01-01 ~ 2026-03-31"
+// 마감일(끝 날짜)을 기준으로 D-Day 계산
+function parseDday(reqstBeginEndDe) {
+  if (!reqstBeginEndDe) return null
+  const parts = reqstBeginEndDe.split('~')
+  if (parts.length < 2) return null
+  const endStr = parts[1].trim().replace(/-/g, '').replace(/\./g, '')
+  if (!/^\d{8}$/.test(endStr)) return null
+  const y = parseInt(endStr.slice(0, 4), 10)
+  const m = parseInt(endStr.slice(4, 6), 10) - 1
+  const d = parseInt(endStr.slice(6, 8), 10)
+  const endDate = new Date(y, m, d)
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  return Math.floor((endDate - today) / 86400000)
+}
+
+function getDdayBadge(dday) {
+  if (dday === null) return null
+  if (dday < 0)  return { label: '마감',    bg: '#6b84a822', color: '#6b84a8', border: '#6b84a844' }
+  if (dday === 0) return { label: 'D-Day',  bg: '#dc354522', color: '#dc3545', border: '#dc354544' }
+  if (dday <= 3) return { label: `D-${dday}`, bg: '#dc354522', color: '#dc3545', border: '#dc354544' }
+  if (dday <= 7) return { label: `D-${dday}`, bg: '#fd7e1422', color: '#fd7e14', border: '#fd7e1444' }
+  return { label: `D-${dday}`, bg: '#0ea57122', color: '#0ea571', border: '#0ea57144' }
+}
+
 function BizInfoSection({ C, isMobile }) {
   const [activeTab, setActiveTab] = useState('전체')
   const [items, setItems] = useState([])
@@ -433,58 +458,77 @@ function BizInfoSection({ C, isMobile }) {
         ) : items.length === 0 ? (
           <div style={{ padding: '24px 18px', textAlign: 'center', color: C.sub, fontSize: 13 }}>해당 기관 공지사항이 없습니다.</div>
         ) : (
-          items.map((item, idx) => (
-            <a
-              key={item.pblancId || idx}
-              href={item.pblancUrl || `https://www.bizinfo.go.kr/web/lay1/bbs/S1T122C128/AS/74/view.do?pblancId=${item.pblancId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: 'flex',
-                flexDirection: isMobile ? 'column' : 'row',
-                alignItems: isMobile ? 'flex-start' : 'center',
-                gap: isMobile ? 4 : 12,
-                padding: '11px 18px',
-                borderBottom: idx < items.length - 1 ? `1px solid ${C.line}` : 'none',
-                textDecoration: 'none',
-                transition: 'background 0.12s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = C.s3 }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-            >
-              {/* 기관명 배지 */}
-              <span style={{
-                display: 'inline-block', flexShrink: 0,
-                padding: '2px 8px', borderRadius: 999,
-                fontSize: 10, fontWeight: 700,
-                background: `${C.gold}22`, color: C.gold,
-                border: `1px solid ${C.gold}44`,
-                whiteSpace: 'nowrap',
-                maxWidth: isMobile ? '100%' : 100,
-                overflow: 'hidden', textOverflow: 'ellipsis',
-              }}>
-                {item.jrsdInsttNm || item.excInsttNm || '기업마당'}
-              </span>
-              {/* 공고명 */}
-              <span style={{
-                flex: 1, fontSize: 13, color: C.text,
-                overflow: 'hidden', textOverflow: 'ellipsis',
-                whiteSpace: isMobile ? 'normal' : 'nowrap',
-                lineHeight: 1.5,
-              }}>
-                {item.pblancNm}
-              </span>
-              {/* 신청기간 */}
-              {item.reqstBeginEndDe && (
+          items.map((item, idx) => {
+            const dday = parseDday(item.reqstBeginEndDe)
+            const badge = getDdayBadge(dday)
+            const expired = dday !== null && dday < 0
+            return (
+              <a
+                key={item.pblancId || idx}
+                href={item.pblancUrl || `https://www.bizinfo.go.kr/web/lay1/bbs/S1T122C128/AS/74/view.do?pblancId=${item.pblancId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex',
+                  flexDirection: isMobile ? 'column' : 'row',
+                  alignItems: isMobile ? 'flex-start' : 'center',
+                  gap: isMobile ? 4 : 12,
+                  padding: '11px 18px',
+                  borderBottom: idx < items.length - 1 ? `1px solid ${C.line}` : 'none',
+                  textDecoration: 'none',
+                  transition: 'background 0.12s',
+                  opacity: expired ? 0.45 : 1,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = C.s3 }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+              >
+                {/* 기관명 배지 */}
                 <span style={{
-                  flexShrink: 0, fontSize: 11, color: C.sub,
+                  display: 'inline-block', flexShrink: 0,
+                  padding: '2px 8px', borderRadius: 999,
+                  fontSize: 10, fontWeight: 700,
+                  background: `${C.gold}22`, color: C.gold,
+                  border: `1px solid ${C.gold}44`,
                   whiteSpace: 'nowrap',
+                  maxWidth: isMobile ? '100%' : 100,
+                  overflow: 'hidden', textOverflow: 'ellipsis',
                 }}>
-                  {item.reqstBeginEndDe}
+                  {item.jrsdInsttNm || item.excInsttNm || '기업마당'}
                 </span>
-              )}
-            </a>
-          ))
+                {/* 공고명 */}
+                <span style={{
+                  flex: 1, fontSize: 13, color: C.text,
+                  overflow: 'hidden', textOverflow: 'ellipsis',
+                  whiteSpace: isMobile ? 'normal' : 'nowrap',
+                  lineHeight: 1.5,
+                }}>
+                  {item.pblancNm}
+                </span>
+                {/* D-Day 뱃지 */}
+                {badge && (
+                  <span style={{
+                    flexShrink: 0,
+                    padding: '2px 8px', borderRadius: 999,
+                    fontSize: 10, fontWeight: 700,
+                    background: badge.bg, color: badge.color,
+                    border: `1px solid ${badge.border}`,
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {badge.label}
+                  </span>
+                )}
+                {/* 신청기간 */}
+                {item.reqstBeginEndDe && (
+                  <span style={{
+                    flexShrink: 0, fontSize: 11, color: C.sub,
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {item.reqstBeginEndDe}
+                  </span>
+                )}
+              </a>
+            )
+          })
         )}
       </div>
 
