@@ -521,11 +521,40 @@ export default function Customers({ consultantFilter, profile }) {
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'superadmin'
 
+  const handleExportCSV = () => {
+    if (filtered.length === 0) {
+      alert('내보낼 고객사가 없습니다.')
+      return
+    }
+    const headers = ['고객번호', '업체명', '대표자명', '연락처', '업종', '지역', '유입경로', '상태', '담당자', '접수일']
+    const fields = ['id', 'company', 'ceo', 'phone', 'industry', 'region', 'lead_source', 'status', 'consultantName', 'received_date']
+    const escape = (val) => {
+      const s = val == null ? '' : String(val)
+      return s.includes(',') || s.includes('\n') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const rows = [headers.join(',')]
+    filtered.forEach(c => {
+      rows.push(fields.map(f => escape(c[f])).join(','))
+    })
+    const csv = '\uFEFF' + rows.join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const today = new Date().toISOString().slice(0, 10)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `FUNDIT_고객목록_${today}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h3 style={{ margin: 0, color: C.text }}>{consultantFilter ? '내 고객사' : '고객사 관리'}</h3>
-        <Button variant="primary" onClick={() => setShowRegister(true)}>+ 고객사 등록</Button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {!isMobile && <Button variant="secondary" onClick={handleExportCSV}>내보내기</Button>}
+          <Button variant="primary" onClick={() => setShowRegister(true)}>+ 고객사 등록</Button>
+        </div>
       </div>
 
       {/* 상태 필터 */}
