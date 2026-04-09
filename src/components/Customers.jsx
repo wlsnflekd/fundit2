@@ -352,7 +352,13 @@ export default function Customers({ consultantFilter, profile }) {
               subscribe()
             }, 30000)
           }
-          if (status === 'TIMED_OUT') console.warn('[Realtime] customers 구독 타임아웃')
+          if (status === 'TIMED_OUT') {
+            console.warn('[Realtime] customers 구독 타임아웃 — 30초 후 재시도')
+            retryTimer = setTimeout(() => {
+              supabase.removeChannel(ch)
+              subscribe()
+            }, 30000)
+          }
         })
     } // end subscribe()
 

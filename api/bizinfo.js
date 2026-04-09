@@ -8,13 +8,14 @@ export default async function handler(req, res) {
     return res.status(204).end()
   }
 
-  // VITE_ 접두어 있는 변수가 Vercel에 등록돼 있으므로 그대로 사용
-  const supabaseUrl  = process.env.VITE_SUPABASE_URL
-  const anonKey      = process.env.VITE_SUPABASE_ANON_KEY
+  // VITE_ 접두어 변수(Vite 빌드 인라인용)와 일반 변수 모두 시도
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+                   || 'https://ddivdcsierbngtuxtdyu.supabase.co'
+  const anonKey     = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
 
-  if (!supabaseUrl || !anonKey) {
-    console.error('[bizinfo] VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY not configured')
-    return res.status(500).json({ error: 'Supabase env vars not configured' })
+  if (!anonKey) {
+    console.error('[bizinfo] SUPABASE_ANON_KEY not configured (tried VITE_SUPABASE_ANON_KEY and SUPABASE_ANON_KEY)')
+    return res.status(500).json({ error: 'SUPABASE_ANON_KEY not configured' })
   }
 
   const tab      = req.query.tab      || '전체'
