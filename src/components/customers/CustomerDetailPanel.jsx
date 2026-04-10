@@ -3,6 +3,31 @@ import { useT } from '../../theme.jsx'
 import { supabase, getCustomerSensitive } from '../../supabase.js'
 import { DetailSkeleton } from '../Common.jsx'
 
+// ─── textarea auto-resize 헬퍼 ────────────────────────────────────────────────
+// height='auto' → reflow → 브라우저가 cursor를 viewport에 맞추려 부모 스크롤을 이동시키는 버그 방지
+// resize 전 부모 스크롤 컨테이너의 scrollTop을 저장하고, resize 후 복원한다
+function getScrollParent(el) {
+  let node = el.parentElement
+  while (node && node !== document.body) {
+    const { overflowY } = window.getComputedStyle(node)
+    if (overflowY === 'auto' || overflowY === 'scroll') return node
+    node = node.parentElement
+  }
+  return document.scrollingElement
+}
+
+function autoResizeTextarea(el) {
+  const scrollParent = getScrollParent(el)
+  const parentScrollTop = scrollParent ? scrollParent.scrollTop : 0
+  const savedScrollTop = el.scrollTop
+
+  el.style.height = '1px'           // 'auto' 대신 1px — layout reflow 최소화로 scroll 재계산 방지
+  el.style.height = el.scrollHeight + 'px'
+
+  el.scrollTop = savedScrollTop
+  if (scrollParent) scrollParent.scrollTop = parentScrollTop
+}
+
 // 민감 컬럼 목록 — 일반 UPDATE 경로를 타지 않고 RPC로만 저장
 const SENSITIVE_FIELDS = new Set([
   'aippin_id', 'aippin_pw', 'aippin_2fa',
@@ -344,12 +369,14 @@ function useInputStyle() {
 function TabBasic({ data, onChange, consultants, isAdmin, canViewAuth }) {
   const memoRef = useRef(null)
 
-  // 초기 로드 및 값 변경 시 높이 자동 조정
+  // consultation_memo는 uncontrolled textarea로 관리:
+  // 포커스가 없을 때만 DOM 값을 외부 data로 갱신 → 자동저장 리렌더가 커서를 리셋하지 않음
   useEffect(() => {
     const el = memoRef.current
-    if (!el) return
-    el.style.height = 'auto'
-    el.style.height = el.scrollHeight + 'px'
+    if (el && document.activeElement !== el) {
+      el.value = data.consultation_memo ?? ''
+      autoResizeTextarea(el)
+    }
   }, [data.consultation_memo])
   const C = useT()
   const inputStyle = useInputStyle()
@@ -550,16 +577,16 @@ function TabBasic({ data, onChange, consultants, isAdmin, canViewAuth }) {
       </FieldWrapper>
 
       <FieldWrapper label="상담내용" spanFull>
+        {/* uncontrolled: defaultValue로 초기값만 주입, 이후 DOM이 직접 관리
+            → 자동저장 리렌더가 발생해도 커서/스크롤 위치 리셋되지 않음 */}
         <textarea
           ref={memoRef}
           rows={4}
           style={{ ...inputStyle, resize: 'none', lineHeight: 1.6, overflow: 'hidden' }}
-          value={data.consultation_memo ?? ''}
+          defaultValue={data.consultation_memo ?? ''}
           onChange={e => {
+            autoResizeTextarea(e.target)
             onChange('consultation_memo', e.target.value)
-            const el = e.target
-            el.style.height = 'auto'
-            el.style.height = el.scrollHeight + 'px'
           }}
           placeholder="상담 내용을 입력하세요"
         />
