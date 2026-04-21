@@ -83,6 +83,7 @@ function CustomerRegisterPanel({ consultants, profile, onClose, onCreated, isMob
   const C = useT()
   const [form, setForm] = useState({
     company: '', ceo: '', industry: '', consultant: '', status: STATUS_LIST[0] ?? '신규',
+    received_at: '', phone: '', business_type: '',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -102,6 +103,9 @@ function CustomerRegisterPanel({ consultants, profile, onClose, onCreated, isMob
       industry: form.industry.trim() || null,
       consultant: form.consultant || null,
       status: form.status || null,
+      received_at: form.received_at || null,
+      phone: form.phone.trim() || null,
+      business_type: form.business_type || null,
       pool: false,
       tags: [],
       score: 0,
@@ -127,6 +131,16 @@ function CustomerRegisterPanel({ consultants, profile, onClose, onCreated, isMob
       <div><label style={labelStyle}>업체명 *</label><input style={inputStyle} value={form.company} onChange={e => set('company', e.target.value)} placeholder="(주)그린테크" /></div>
       <div><label style={labelStyle}>대표자 이름</label><input style={inputStyle} value={form.ceo} onChange={e => set('ceo', e.target.value)} placeholder="홍길동" /></div>
       <div><label style={labelStyle}>업종</label><input style={inputStyle} value={form.industry} onChange={e => set('industry', e.target.value)} placeholder="제조업" /></div>
+      <div>
+        <label style={labelStyle}>사업자유형</label>
+        <select style={inputStyle} value={form.business_type} onChange={e => set('business_type', e.target.value)}>
+          <option value="">선택 안함</option>
+          <option value="개인사업자">개인사업자</option>
+          <option value="법인사업자">법인사업자</option>
+        </select>
+      </div>
+      <div><label style={labelStyle}>연락처</label><input style={inputStyle} value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="010-1234-5678" /></div>
+      <div><label style={labelStyle}>접수일</label><input type="date" style={inputStyle} value={form.received_at} onChange={e => set('received_at', e.target.value)} /></div>
       <div>
         <label style={labelStyle}>담당자</label>
         <select style={inputStyle} value={form.consultant} onChange={e => set('consultant', e.target.value)}>
