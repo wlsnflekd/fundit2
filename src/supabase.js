@@ -378,7 +378,8 @@ export const getCustomers = async ({
   pageSize = 50,
   status,       // '전체' 또는 undefined → 필터 안 함
   search,       // 문자열 → company/ceo/industry/phone ilike 검색
-  consultantId  // uuid → 담당자 필터
+  consultantId, // uuid → 담당자 필터
+  leadSource,   // 문자열 → 유입경로 필터 ('전체' 또는 undefined → 필터 안 함)
 } = {}) => {
   let query = supabase
     .from('customers')
@@ -398,6 +399,10 @@ export const getCustomers = async ({
 
   if (consultantId) {
     query = query.eq('consultant', consultantId)
+  }
+
+  if (leadSource && leadSource !== '전체') {
+    query = query.eq('lead_source', leadSource)
   }
 
   // pageSize = 0 이면 range 미적용 (CSV 내보내기용 전건 조회)

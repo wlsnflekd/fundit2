@@ -244,6 +244,7 @@ export default function Customers({ consultantFilter, profile }) {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('전체')
   const [search, setSearch] = useState('')
+  const [leadSourceFilter, setLeadSourceFilter] = useState('전체')
   const [selected, setSelected] = useState(null)
   const panelRef = useRef(null)
   const [showRegister, setShowRegister] = useState(false)
@@ -264,10 +265,12 @@ export default function Customers({ consultantFilter, profile }) {
   const searchRef = useRef(search)
   const consultantFilterRef = useRef(consultantFilter)
   const pageRef = useRef(page)
+  const leadSourceFilterRef = useRef(leadSourceFilter)
   useEffect(() => { filterRef.current = filter }, [filter])
   useEffect(() => { searchRef.current = search }, [search])
   useEffect(() => { consultantFilterRef.current = consultantFilter }, [consultantFilter])
   useEffect(() => { pageRef.current = page }, [page])
+  useEffect(() => { leadSourceFilterRef.current = leadSourceFilter }, [leadSourceFilter])
 
   // 담당자 인라인 편집
   const [editingConsultantId, setEditingConsultantId] = useState(null)
@@ -304,6 +307,7 @@ export default function Customers({ consultantFilter, profile }) {
           status: filterRef.current,
           search: searchRef.current,
           consultantId: consultantFilterRef.current,
+          leadSource: leadSourceFilterRef.current,
         }),
         supabase.from('profiles').select('id, name, role, created_at').eq('approval_status', 'approved'),
       ])
@@ -331,7 +335,7 @@ export default function Customers({ consultantFilter, profile }) {
     }
   }
 
-  useEffect(() => { loadData() }, [filter, search, consultantFilter, page])
+  useEffect(() => { loadData() }, [filter, search, consultantFilter, page, leadSourceFilter])
 
   // ── customers 테이블 Realtime 구독 ───────────────────────────────────────────
   // 의존성을 profile 객체 전체가 아닌 workspaceId 문자열로 고정:
@@ -595,6 +599,7 @@ export default function Customers({ consultantFilter, profile }) {
         status: filterRef.current,
         search: searchRef.current,
         consultantId: consultantFilterRef.current,
+        leadSource: leadSourceFilterRef.current,
       })
       if (error || !data?.length) {
         alert('내보낼 고객사가 없습니다.')
@@ -657,6 +662,21 @@ export default function Customers({ consultantFilter, profile }) {
         {/* 검색 + 색상 토글 — 모바일에서는 필터 아래 별도 행으로 */}
         {!isMobile && (
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <select
+              value={leadSourceFilter}
+              onChange={e => { setLeadSourceFilter(e.target.value); setPage(1) }}
+              style={{
+                padding: '4px 10px', borderRadius: 8, outline: 'none',
+                background: leadSourceFilter !== '전체' ? '#d4952a22' : C.s3,
+                border: `1px solid ${leadSourceFilter !== '전체' ? '#d4952a' : C.line}`,
+                color: leadSourceFilter !== '전체' ? '#d4952a' : C.sub,
+                fontSize: 11, fontWeight: 700, cursor: 'pointer',
+              }}
+            >
+              {['전체', '직접입력', ...LEAD_SOURCE_OPTIONS].map(o => (
+                <option key={o} value={o} style={{ background: C.s2, color: C.text }}>{o === '전체' ? '유입경로 전체' : o}</option>
+              ))}
+            </select>
             <label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', userSelect: 'none' }}>
               <input
                 type="checkbox"
@@ -685,19 +705,33 @@ export default function Customers({ consultantFilter, profile }) {
               color: C.text, fontSize: 13, outline: 'none', marginBottom: 8,
             }}
           />
-          {/* 상태 색상 체크박스 — 모바일에서도 표시 */}
-          <label style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            cursor: 'pointer', userSelect: 'none', marginBottom: 12,
-          }}>
-            <input
-              type="checkbox"
-              checked={colorRows}
-              onChange={e => setColorRows(e.target.checked)}
-              style={{ cursor: 'pointer', accentColor: C.gold, width: 16, height: 16 }}
-            />
-            <span style={{ fontSize: 12, color: C.sub }}>상태 색상</span>
-          </label>
+          {/* 유입경로 필터 + 상태 색상 체크박스 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <select
+              value={leadSourceFilter}
+              onChange={e => { setLeadSourceFilter(e.target.value); setPage(1) }}
+              style={{
+                padding: '6px 10px', borderRadius: 8, outline: 'none',
+                background: leadSourceFilter !== '전체' ? '#d4952a22' : C.s3,
+                border: `1px solid ${leadSourceFilter !== '전체' ? '#d4952a' : C.line}`,
+                color: leadSourceFilter !== '전체' ? '#d4952a' : C.sub,
+                fontSize: 12, fontWeight: 700, cursor: 'pointer', flex: 1,
+              }}
+            >
+              {['전체', '직접입력', ...LEAD_SOURCE_OPTIONS].map(o => (
+                <option key={o} value={o} style={{ background: C.s2, color: C.text }}>{o === '전체' ? '유입경로 전체' : o}</option>
+              ))}
+            </select>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none', flexShrink: 0 }}>
+              <input
+                type="checkbox"
+                checked={colorRows}
+                onChange={e => setColorRows(e.target.checked)}
+                style={{ cursor: 'pointer', accentColor: C.gold, width: 16, height: 16 }}
+              />
+              <span style={{ fontSize: 12, color: C.sub }}>상태 색상</span>
+            </label>
+          </div>
         </>
       )}
 
