@@ -140,7 +140,7 @@ function CustomerRegisterPanel({ consultants, profile, onClose, onCreated, isMob
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div><label style={labelStyle}>업체명 *</label><input style={inputStyle} value={form.company} onChange={e => set('company', e.target.value)} placeholder="(주)그린테크" /></div>
       <div><label style={labelStyle}>대표자 이름</label><input style={inputStyle} value={form.ceo} onChange={e => set('ceo', e.target.value)} placeholder="홍길동" /></div>
-      <div><label style={labelStyle}>업종</label><input style={inputStyle} value={form.industry} onChange={e => set('industry', e.target.value)} placeholder="제조업" /></div>
+      <div><label style={labelStyle}>업종</label><input style={inputStyle} value={form.industry} onChange={e => set('industry', e.target.value)} placeholder="업종" /></div>
       <div>
         <label style={labelStyle}>사업자유형</label>
         <select style={inputStyle} value={form.business_type} onChange={e => set('business_type', e.target.value)}>
