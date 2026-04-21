@@ -731,10 +731,11 @@ export default function Customers({ consultantFilter, profile }) {
       ) : (
         <div style={{ background: C.s2, border: `1px solid ${C.line}`, borderRadius: 14, overflow: 'auto' }}>
           {loading ? (
-            <TableSkeleton rows={8} cols={isAdmin ? 11 : 10} />
+            <TableSkeleton rows={8} cols={isAdmin ? 12 : 11} />
           ) : (
-            <table style={{ width: '100%', minWidth: isAdmin ? 960 : 920, borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+            <table style={{ width: '100%', minWidth: isAdmin ? 1000 : 960, borderCollapse: 'collapse', tableLayout: 'fixed' }}>
               <colgroup>
+                <col style={{ width: 40 }} />
                 <col style={{ width: 70 }} />
                 <col style={{ width: 80 }} />
                 <col style={{ width: 130 }} />
@@ -748,6 +749,7 @@ export default function Customers({ consultantFilter, profile }) {
               </colgroup>
               <thead>
                 <tr style={{ background: C.s1 }}>
+                  <th style={{ ...th, width: 40, minWidth: 40, textAlign: 'center' }}>#</th>
                   <th style={{ ...th, width: 70, minWidth: 70 }}>상태</th>
                   <th style={{ ...th, width: 80, minWidth: 80 }}>담당자</th>
                   <th style={{ ...th, width: 130, minWidth: 130 }}>업체명</th>
@@ -761,7 +763,7 @@ export default function Customers({ consultantFilter, profile }) {
                 </tr>
               </thead>
               <tbody>
-                {customers.map(c => {
+                {customers.map((c, idx) => {
                   const ellipsis = { overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', display: 'block' }
                   return (
                   <tr
@@ -771,6 +773,10 @@ export default function Customers({ consultantFilter, profile }) {
                     onMouseEnter={() => setHoveredId(c.id)}
                     onMouseLeave={() => setHoveredId(null)}
                   >
+                    {/* 번호 */}
+                    <td style={{ ...td, width: 40, minWidth: 40, maxWidth: 40, textAlign: 'center', color: C.sub, fontSize: 12 }}>
+                      {(page - 1) * PAGE_SIZE + idx + 1}
+                    </td>
                     {/* 상태 */}
                     <td
                       style={{ ...td, width: 70, minWidth: 70, maxWidth: 70, cursor: 'pointer', position: 'relative' }}
