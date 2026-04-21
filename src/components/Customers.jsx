@@ -79,11 +79,20 @@ function CustomerMobileCard({ c, onSelect, C }) {
 }
 
 // ─── 고객사 등록 패널 ─────────────────────────────────────────────────────────
+function formatPhone(value) {
+  const digits = value.replace(/\D/g, '').slice(0, 11)
+  if (digits.length < 4) return digits
+  if (digits.length < 8) return `${digits.slice(0, 3)}-${digits.slice(3)}`
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`
+}
+
+const LEAD_SOURCE_OPTIONS = ['네이버', '카카오', '지인', '유튜브', '기타']
+
 function CustomerRegisterPanel({ consultants, profile, onClose, onCreated, isMobile }) {
   const C = useT()
   const [form, setForm] = useState({
     company: '', ceo: '', industry: '', consultant: '', status: STATUS_LIST[0] ?? '신규',
-    received_at: '', phone: '', business_type: '',
+    received_date: '', phone: '', business_type: '', lead_source: '',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -103,9 +112,10 @@ function CustomerRegisterPanel({ consultants, profile, onClose, onCreated, isMob
       industry: form.industry.trim() || null,
       consultant: form.consultant || null,
       status: form.status || null,
-      received_at: form.received_at || null,
+      received_date: form.received_date || null,
       phone: form.phone.trim() || null,
       business_type: form.business_type || null,
+      lead_source: form.lead_source || null,
       pool: false,
       tags: [],
       score: 0,
@@ -139,8 +149,15 @@ function CustomerRegisterPanel({ consultants, profile, onClose, onCreated, isMob
           <option value="법인사업자">법인사업자</option>
         </select>
       </div>
-      <div><label style={labelStyle}>연락처</label><input style={inputStyle} value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="010-1234-5678" /></div>
-      <div><label style={labelStyle}>접수일</label><input type="date" style={inputStyle} value={form.received_at} onChange={e => set('received_at', e.target.value)} /></div>
+      <div><label style={labelStyle}>연락처</label><input style={inputStyle} value={form.phone} onChange={e => set('phone', formatPhone(e.target.value))} placeholder="010-1234-5678" /></div>
+      <div><label style={labelStyle}>접수일</label><input type="date" style={inputStyle} value={form.received_date} onChange={e => set('received_date', e.target.value)} /></div>
+      <div>
+        <label style={labelStyle}>유입경로</label>
+        <select style={inputStyle} value={form.lead_source} onChange={e => set('lead_source', e.target.value)}>
+          <option value="">선택 안함</option>
+          {LEAD_SOURCE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      </div>
       <div>
         <label style={labelStyle}>담당자</label>
         <select style={inputStyle} value={form.consultant} onChange={e => set('consultant', e.target.value)}>
