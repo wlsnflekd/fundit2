@@ -86,7 +86,7 @@ function formatPhone(value) {
   return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`
 }
 
-const LEAD_SOURCE_OPTIONS = ['네이버', '카카오', '지인', '유튜브', '기타']
+const LEAD_SOURCE_OPTIONS = ['당근', '메타', '점포라인', '렌탈', '소개', '기타']
 
 function CustomerRegisterPanel({ consultants, profile, onClose, onCreated, isMobile }) {
   const C = useT()
@@ -96,6 +96,7 @@ function CustomerRegisterPanel({ consultants, profile, onClose, onCreated, isMob
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [leadSourceDirect, setLeadSourceDirect] = useState(false)
 
   const set = (key, val) => setForm(prev => ({ ...prev, [key]: val }))
 
@@ -153,10 +154,31 @@ function CustomerRegisterPanel({ consultants, profile, onClose, onCreated, isMob
       <div><label style={labelStyle}>접수일</label><input type="date" style={inputStyle} value={form.received_date} onChange={e => set('received_date', e.target.value)} /></div>
       <div>
         <label style={labelStyle}>유입경로</label>
-        <select style={inputStyle} value={form.lead_source} onChange={e => set('lead_source', e.target.value)}>
-          <option value="">선택 안함</option>
-          {LEAD_SOURCE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-        </select>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <select
+            style={inputStyle}
+            value={leadSourceDirect ? '직접입력' : (form.lead_source || '')}
+            onChange={e => {
+              const v = e.target.value
+              if (v === '직접입력') { setLeadSourceDirect(true); set('lead_source', '') }
+              else if (v === '') { setLeadSourceDirect(false); set('lead_source', '') }
+              else { setLeadSourceDirect(false); set('lead_source', v) }
+            }}
+          >
+            <option value="">선택 안함</option>
+            <option value="직접입력">직접입력</option>
+            {LEAD_SOURCE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+          {leadSourceDirect && (
+            <input
+              style={inputStyle}
+              value={form.lead_source}
+              onChange={e => set('lead_source', e.target.value)}
+              placeholder="유입경로 직접 입력"
+              autoFocus
+            />
+          )}
+        </div>
       </div>
       <div>
         <label style={labelStyle}>담당자</label>

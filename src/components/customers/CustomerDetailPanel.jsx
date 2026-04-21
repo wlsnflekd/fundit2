@@ -54,10 +54,12 @@ export const STATUS_CONFIG = {
 }
 
 const LEAD_SOURCE_CONFIG = {
-  네이버:   { bg: '#0ea57122', color: '#0ea571', border: '#0ea57144' },
-  카카오:   { bg: '#eab30822', color: '#ca8a04', border: '#eab30844' },
-  지인:     { bg: '#1d6fe822', color: '#1d6fe8', border: '#1d6fe844' },
-  유튜브:   { bg: '#dc354522', color: '#dc3545', border: '#dc354544' },
+  당근:     { bg: '#ff700222', color: '#ff7002', border: '#ff700244' },
+  메타:     { bg: '#1877f222', color: '#1877f2', border: '#1877f244' },
+  점포라인: { bg: '#00b35b22', color: '#00b35b', border: '#00b35b44' },
+  렌탈:     { bg: '#7c3aed22', color: '#7c3aed', border: '#7c3aed44' },
+  소개:     { bg: '#0ea5e922', color: '#0ea5e9', border: '#0ea5e944' },
+  기타:     { bg: '#6b728022', color: '#6b7280', border: '#6b728044' },
 }
 
 // 드롭다운 프리셋 목록 (직접입력 맨 위)
