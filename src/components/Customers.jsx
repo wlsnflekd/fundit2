@@ -245,6 +245,7 @@ export default function Customers({ consultantFilter, profile }) {
   const [filter, setFilter] = useState('전체')
   const [search, setSearch] = useState('')
   const [leadSourceFilter, setLeadSourceFilter] = useState('전체')
+  const [adminConsultantFilter, setAdminConsultantFilter] = useState('')
   const [selected, setSelected] = useState(null)
   const panelRef = useRef(null)
   const [showRegister, setShowRegister] = useState(false)
@@ -266,11 +267,13 @@ export default function Customers({ consultantFilter, profile }) {
   const consultantFilterRef = useRef(consultantFilter)
   const pageRef = useRef(page)
   const leadSourceFilterRef = useRef(leadSourceFilter)
+  const adminConsultantFilterRef = useRef(adminConsultantFilter)
   useEffect(() => { filterRef.current = filter }, [filter])
   useEffect(() => { searchRef.current = search }, [search])
   useEffect(() => { consultantFilterRef.current = consultantFilter }, [consultantFilter])
   useEffect(() => { pageRef.current = page }, [page])
   useEffect(() => { leadSourceFilterRef.current = leadSourceFilter }, [leadSourceFilter])
+  useEffect(() => { adminConsultantFilterRef.current = adminConsultantFilter }, [adminConsultantFilter])
 
   // 담당자 인라인 편집
   const [editingConsultantId, setEditingConsultantId] = useState(null)
@@ -306,7 +309,7 @@ export default function Customers({ consultantFilter, profile }) {
           pageSize: PAGE_SIZE,
           status: filterRef.current,
           search: searchRef.current,
-          consultantId: consultantFilterRef.current,
+          consultantId: adminConsultantFilterRef.current || consultantFilterRef.current,
           leadSource: leadSourceFilterRef.current,
         }),
         supabase.from('profiles').select('id, name, role, created_at').eq('approval_status', 'approved'),
@@ -335,7 +338,7 @@ export default function Customers({ consultantFilter, profile }) {
     }
   }
 
-  useEffect(() => { loadData() }, [filter, search, consultantFilter, page, leadSourceFilter])
+  useEffect(() => { loadData() }, [filter, search, consultantFilter, page, leadSourceFilter, adminConsultantFilter])
 
   // ── customers 테이블 Realtime 구독 ───────────────────────────────────────────
   // 의존성을 profile 객체 전체가 아닌 workspaceId 문자열로 고정:
@@ -598,7 +601,7 @@ export default function Customers({ consultantFilter, profile }) {
         pageSize: 0,
         status: filterRef.current,
         search: searchRef.current,
-        consultantId: consultantFilterRef.current,
+        consultantId: adminConsultantFilterRef.current || consultantFilterRef.current,
         leadSource: leadSourceFilterRef.current,
       })
       if (error || !data?.length) {
@@ -677,6 +680,24 @@ export default function Customers({ consultantFilter, profile }) {
                 <option key={o} value={o} style={{ background: C.s2, color: C.text }}>{o === '전체' ? '유입경로 전체' : o}</option>
               ))}
             </select>
+            {isAdmin && (
+              <select
+                value={adminConsultantFilter}
+                onChange={e => { setAdminConsultantFilter(e.target.value); setPage(1) }}
+                style={{
+                  padding: '4px 10px', borderRadius: 8, outline: 'none',
+                  background: adminConsultantFilter ? '#d4952a22' : C.s3,
+                  border: `1px solid ${adminConsultantFilter ? '#d4952a' : C.line}`,
+                  color: adminConsultantFilter ? '#d4952a' : C.sub,
+                  fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                }}
+              >
+                <option value="" style={{ background: C.s2, color: C.text }}>담당자 전체</option>
+                {consultants.map(m => (
+                  <option key={m.id} value={m.id} style={{ background: C.s2, color: C.text }}>{m.name}</option>
+                ))}
+              </select>
+            )}
             <label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', userSelect: 'none' }}>
               <input
                 type="checkbox"
@@ -705,8 +726,8 @@ export default function Customers({ consultantFilter, profile }) {
               color: C.text, fontSize: 13, outline: 'none', marginBottom: 8,
             }}
           />
-          {/* 유입경로 필터 + 상태 색상 체크박스 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          {/* 유입경로 필터 + 담당자 필터(admin) + 상태 색상 체크박스 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
             <select
               value={leadSourceFilter}
               onChange={e => { setLeadSourceFilter(e.target.value); setPage(1) }}
@@ -722,6 +743,24 @@ export default function Customers({ consultantFilter, profile }) {
                 <option key={o} value={o} style={{ background: C.s2, color: C.text }}>{o === '전체' ? '유입경로 전체' : o}</option>
               ))}
             </select>
+            {isAdmin && (
+              <select
+                value={adminConsultantFilter}
+                onChange={e => { setAdminConsultantFilter(e.target.value); setPage(1) }}
+                style={{
+                  padding: '6px 10px', borderRadius: 8, outline: 'none',
+                  background: adminConsultantFilter ? '#d4952a22' : C.s3,
+                  border: `1px solid ${adminConsultantFilter ? '#d4952a' : C.line}`,
+                  color: adminConsultantFilter ? '#d4952a' : C.sub,
+                  fontSize: 12, fontWeight: 700, cursor: 'pointer', flex: 1,
+                }}
+              >
+                <option value="" style={{ background: C.s2, color: C.text }}>담당자 전체</option>
+                {consultants.map(m => (
+                  <option key={m.id} value={m.id} style={{ background: C.s2, color: C.text }}>{m.name}</option>
+                ))}
+              </select>
+            )}
             <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', userSelect: 'none', flexShrink: 0 }}>
               <input
                 type="checkbox"
