@@ -94,7 +94,7 @@ function formatPhone(value) {
   return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`
 }
 
-const LEAD_SOURCE_OPTIONS = ['당근', '메타', '점포라인', '렌탈', '소개', '기타']
+const LEAD_SOURCE_OPTIONS = ['당근', '메타', '인스타', '점포라인', '렌탈', '소개', '기타']
 
 function CustomerRegisterPanel({ consultants, profile, onClose, onCreated, isMobile }) {
   const C = useT()
