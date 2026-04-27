@@ -24,7 +24,7 @@ function StatusBadge({ status }) {
 }
 
 // ─── 모바일 카드 (테이블 대체) ────────────────────────────────────────────────
-function CustomerMobileCard({ c, onSelect, C }) {
+function CustomerMobileCard({ c, onSelect, C, isDuplicate }) {
   return (
     <div
       onClick={() => onSelect(c)}
@@ -41,6 +41,14 @@ function CustomerMobileCard({ c, onSelect, C }) {
           fontSize: 15, fontWeight: 700, color: C.text,
           flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>{c.company}</span>
+        {isDuplicate && (
+          <span style={{
+            flexShrink: 0, fontSize: 10, fontWeight: 700,
+            padding: '1px 5px', borderRadius: 4,
+            background: '#f59e0b22', color: '#f59e0b',
+            border: '1px solid #f59e0b55', whiteSpace: 'nowrap',
+          }}>중복</span>
+        )}
         {c.pool && (
           <span style={{
             fontSize: 10, fontWeight: 700, color: '#4d9eff',
@@ -546,6 +554,17 @@ export default function Customers({ consultantFilter, profile }) {
     return ''
   }
 
+  // ── phone 중복 집합 계산 ────────────────────────────────────────────────────
+  // null·빈 문자열은 체크 제외. 현재 페이지의 customers 배열 안에서만 처리.
+  const duplicatePhones = (() => {
+    const counts = {}
+    customers.forEach(c => {
+      const p = c.phone?.trim()
+      if (p) counts[p] = (counts[p] || 0) + 1
+    })
+    return new Set(Object.keys(counts).filter(p => counts[p] >= 2))
+  })()
+
   const handleUpdate = (updated) => {
     const consultantName = consultants.find(m => m.id === updated.consultant)?.name || '-'
     const enriched = { ...updated, consultantName }
@@ -707,7 +726,7 @@ export default function Customers({ consultantFilter, profile }) {
               />
               <span style={{ fontSize: 11, color: C.sub, whiteSpace: 'nowrap' }}>상태 색상</span>
             </label>
-            <input value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} placeholder="업체명·이름·연락처 검색"
+            <input value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} placeholder="업체명·이름·연락처·업종·지역·유입채널·상담내용 검색"
               style={{ padding: '4px 12px', borderRadius: 8, border: `1px solid ${C.line}`, background: C.s3, color: C.text, fontSize: 12, width: 180, outline: 'none' }} />
           </div>
         )}
@@ -718,7 +737,7 @@ export default function Customers({ consultantFilter, profile }) {
           <input
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1) }}
-            placeholder="업체명·이름·연락처 검색"
+            placeholder="업체명·이름·연락처·업종·지역·유입채널·상담내용 검색"
             style={{
               display: 'block', width: '100%', boxSizing: 'border-box',
               padding: '8px 12px', borderRadius: 8,
@@ -797,7 +816,13 @@ export default function Customers({ consultantFilter, profile }) {
             <div style={{ padding: 32, textAlign: 'center', color: C.sub }}>검색 결과가 없습니다.</div>
           ) : (
             customers.map(c => (
-              <CustomerMobileCard key={c.id} c={c} onSelect={setSelected} C={C} />
+              <CustomerMobileCard
+                key={c.id}
+                c={c}
+                onSelect={setSelected}
+                C={C}
+                isDuplicate={duplicatePhones.has(c.phone?.trim())}
+              />
             ))
           )}
         </div>
@@ -923,6 +948,14 @@ export default function Customers({ consultantFilter, profile }) {
                     <td style={{ ...td, width: 130, minWidth: 130, maxWidth: 130 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, overflow: 'hidden' }}>
                         <span title={c.company} style={{ fontWeight: 600, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', display: 'block', minWidth: 0, flex: 1 }}>{c.company}</span>
+                        {duplicatePhones.has(c.phone?.trim()) && (
+                          <span style={{
+                            flexShrink: 0, fontSize: 10, fontWeight: 700,
+                            padding: '1px 5px', borderRadius: 4,
+                            background: '#f59e0b22', color: '#f59e0b',
+                            border: '1px solid #f59e0b55', whiteSpace: 'nowrap',
+                          }}>중복</span>
+                        )}
                         {c.pool && <span style={{ flexShrink: 0, fontSize: 10, padding: '1px 6px', borderRadius: 999, background: C.blue, color: C.base }}>풀</span>}
                       </div>
                     </td>
@@ -1116,6 +1149,7 @@ export default function Customers({ consultantFilter, profile }) {
             consultants={consultants}
             onClose={() => setSelected(null)}
             onUpdate={handleUpdate}
+            isDuplicate={!!(selected?.phone?.trim() && duplicatePhones.has(selected.phone.trim()))}
           />
         </>
       )}

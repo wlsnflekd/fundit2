@@ -961,7 +961,7 @@ function TabAuth({ data, onChange, isAdmin, canViewAuth, loadError }) {
 
 // ─── 고객사 상세 패널 ────────────────────────────────────────────────────────
 
-const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, profile, onClose, onUpdate, consultants = [] }, ref) {
+const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, profile, onClose, onUpdate, consultants = [], isDuplicate = false }, ref) {
   const C = useT()
   const [editData, setEditData] = useState({})
   const [dirtyFields, setDirtyFields] = useState(new Set())
@@ -1228,8 +1228,18 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
       <div style={{ padding: '18px 24px 16px', borderBottom: `1px solid ${C.line}`, background: C.s2, flexShrink: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div style={{ minWidth: 0, flex: 1, paddingRight: 12 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {editData.company || '-'}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
+              <span style={{ fontSize: 16, fontWeight: 700, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+                {editData.company || '-'}
+              </span>
+              {isDuplicate && (
+                <span style={{
+                  flexShrink: 0, fontSize: 10, fontWeight: 700,
+                  padding: '2px 6px', borderRadius: 4,
+                  background: '#f59e0b22', color: '#f59e0b',
+                  border: '1px solid #f59e0b55', whiteSpace: 'nowrap',
+                }}>중복</span>
+              )}
             </div>
             {editData.ceo && (
               <div style={{ fontSize: 13, color: C.sub, marginTop: 3 }}>{editData.ceo}</div>

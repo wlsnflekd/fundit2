@@ -393,7 +393,7 @@ export const getCustomers = async ({
 
   if (search) {
     query = query.or(
-      `company.ilike.%${search}%,ceo.ilike.%${search}%,industry.ilike.%${search}%,phone.ilike.%${search}%`
+      `company.ilike.%${search}%,ceo.ilike.%${search}%,industry.ilike.%${search}%,phone.ilike.%${search}%,consultation_memo.ilike.%${search}%,lead_source.ilike.%${search}%,region.ilike.%${search}%`
     )
   }
 
