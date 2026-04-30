@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { useT, useIsMobile } from '../theme.jsx'
 import { Button, BottomSheet, TableSkeleton } from './Common.jsx'
-import CustomerDetailPanel, { STATUS_CONFIG } from './customers/CustomerDetailPanel.jsx'
+import CustomerDetailPanel, { STATUS_CONFIG, STATUS_GROUPS } from './customers/CustomerDetailPanel.jsx'
 import { supabase, getCustomers, deleteCustomer, createCustomer, createAssignmentNotification } from '../supabase.js'
 
-const STATUS_LIST = Object.keys(STATUS_CONFIG)
+const STATUS_LIST = STATUS_GROUPS.flatMap(g => g.items)
 const STATUS_FILTERS = ['전체', ...STATUS_LIST]
 
 // ─── 리스트용 상태 배지 (STATUS_CONFIG 색상 적용) ────────────────────────────
@@ -198,7 +198,11 @@ function CustomerRegisterPanel({ consultants, profile, onClose, onCreated, isMob
       <div>
         <label style={labelStyle}>상태</label>
         <select style={inputStyle} value={form.status} onChange={e => set('status', e.target.value)}>
-          {STATUS_LIST.map(s => <option key={s} value={s}>{s}</option>)}
+          {STATUS_GROUPS.map(g => (
+            <optgroup key={g.label} label={g.label}>
+              {g.items.map(s => <option key={s} value={s}>{s}</option>)}
+            </optgroup>
+          ))}
         </select>
       </div>
       {error && <div style={{ fontSize: 12, color: C.error }}>{error}</div>}
@@ -673,13 +677,27 @@ export default function Customers({ consultantFilter, profile }) {
         gap: 6, marginBottom: isMobile ? 10 : 14,
         paddingBottom: isMobile ? 4 : 0,
       }}>
-        {STATUS_FILTERS.map(s => (
-          <button key={s} onClick={() => { setFilter(s); setPage(1) }} style={{
-            padding: '3px 10px', borderRadius: 999, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700,
-            flexShrink: 0,
-            background: filter === s ? C.gold : C.s3,
-            color: filter === s ? C.base : C.sub,
-          }}>{s}</button>
+        {/* 전체 버튼 */}
+        <button onClick={() => { setFilter('전체'); setPage(1) }} style={{
+          padding: '3px 10px', borderRadius: 999, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700,
+          flexShrink: 0,
+          background: filter === '전체' ? C.gold : C.s3,
+          color: filter === '전체' ? C.base : C.sub,
+        }}>전체</button>
+
+        {/* 그룹 버튼 + 구분선 */}
+        {STATUS_GROUPS.map((group) => (
+          <Fragment key={group.label}>
+            <div style={{ width: 1, alignSelf: 'stretch', background: C.line, flexShrink: 0, margin: '0 2px' }} />
+            {group.items.map(s => (
+              <button key={s} onClick={() => { setFilter(s); setPage(1) }} style={{
+                padding: '3px 10px', borderRadius: 999, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700,
+                flexShrink: 0,
+                background: filter === s ? C.gold : C.s3,
+                color: filter === s ? C.base : C.sub,
+              }}>{s}</button>
+            ))}
+          </Fragment>
         ))}
         {/* 검색 + 색상 토글 — 모바일에서는 필터 아래 별도 행으로 */}
         {!isMobile && (
@@ -898,8 +916,10 @@ export default function Customers({ consultantFilter, profile }) {
                             }}
                           >
                             <option value="">상태 없음</option>
-                            {STATUS_LIST.map(s => (
-                              <option key={s} value={s}>{s}</option>
+                            {STATUS_GROUPS.map(g => (
+                              <optgroup key={g.label} label={g.label}>
+                                {g.items.map(s => <option key={s} value={s}>{s}</option>)}
+                              </optgroup>
                             ))}
                           </select>
                         </div>

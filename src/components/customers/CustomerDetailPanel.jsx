@@ -36,22 +36,30 @@ const SENSITIVE_FIELDS = new Set([
 
 // ─── 상태 배지 색상 설정 ───────────────────────────────────────────────────────
 export const STATUS_CONFIG = {
+  // 그룹1: 자주 사용
   신규:    { bg: '#1d6fe822', color: '#1d6fe8', border: '#1d6fe844' },
   재통화:  { bg: '#0ea5e922', color: '#0ea5e9', border: '#0ea5e944' },
   상담중:  { bg: '#8b5cf622', color: '#8b5cf6', border: '#8b5cf644' },
+  부재:    { bg: '#6b84a822', color: '#6b84a8', border: '#6b84a844' },
+  거절:    { bg: '#ec489922', color: '#ec4899', border: '#ec489944' },
+  // 그룹2: 진행 단계
   계약:    { bg: '#0ea57122', color: '#0ea571', border: '#0ea57144' },
   상품접수:{ bg: '#22c55e22', color: '#22c55e', border: '#22c55e44' },
   서류준비:{ bg: '#eab30822', color: '#eab308', border: '#eab30844' },
   심사중:  { bg: '#f9731622', color: '#f97316', border: '#f9731644' },
   승인:    { bg: '#16a34a22', color: '#16a34a', border: '#16a34a44' },
   부결:    { bg: '#dc354522', color: '#dc3545', border: '#dc354544' },
-  부재:    { bg: '#6b84a822', color: '#6b84a8', border: '#6b84a844' },
   연락두절:{ bg: '#37415122', color: '#9ca3af', border: '#37415144' },
-  거절:    { bg: '#ec489922', color: '#ec4899', border: '#ec489944' },
   기타:    { bg: '#6b728022', color: '#6b7280', border: '#6b728044' },
-  중요:    { bg: '#dc262622', color: '#dc2626', border: '#dc262644' },
   지원금문의: { bg: '#7c3aed22', color: '#7c3aed', border: '#7c3aed44' },
+  // legacy — 기존 데이터 배지 표시용
+  중요:    { bg: '#dc262622', color: '#dc2626', border: '#dc262644' },
 }
+
+export const STATUS_GROUPS = [
+  { label: '자주 사용', items: ['신규', '재통화', '상담중', '부재', '거절'] },
+  { label: '진행 단계', items: ['계약', '상품접수', '서류준비', '심사중', '승인', '부결', '연락두절', '기타', '지원금문의'] },
+]
 
 const LEAD_SOURCE_CONFIG = {
   당근:     { bg: '#ff700222', color: '#ff7002', border: '#ff700244' },
@@ -65,7 +73,7 @@ const LEAD_SOURCE_CONFIG = {
 // 드롭다운 프리셋 목록 (직접입력 맨 위)
 const LEAD_SOURCE_PRESETS = ['직접입력', ...Object.keys(LEAD_SOURCE_CONFIG)]
 
-const STATUS_LIST = Object.keys(STATUS_CONFIG)
+const STATUS_LIST = STATUS_GROUPS.flatMap(g => g.items)
 
 const REGION_PRESETS = [
   '직접입력',
@@ -121,7 +129,7 @@ function ColorBadge({ value, config }) {
 }
 
 // ─── 색상 셀렉트 (편집 모드) ──────────────────────────────────────────────────
-function ColorSelect({ value, options, config, onChange, placeholder }) {
+function ColorSelect({ value, options, groups, config, onChange, placeholder }) {
   const C = useT()
   const style = value ? (config[value] ?? {}) : {}
   return (
@@ -142,9 +150,14 @@ function ColorSelect({ value, options, config, onChange, placeholder }) {
       }}
     >
       <option value="">{placeholder ?? '선택'}</option>
-      {options.map(opt => (
-        <option key={opt} value={opt}>{opt}</option>
-      ))}
+      {groups
+        ? groups.map(g => (
+            <optgroup key={g.label} label={g.label}>
+              {g.items.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            </optgroup>
+          ))
+        : options?.map(opt => <option key={opt} value={opt}>{opt}</option>)
+      }
     </select>
   )
 }
@@ -402,7 +415,7 @@ function TabBasic({ data, onChange, consultants, isAdmin, canViewAuth }) {
       <FieldWrapper label="상태">
         <ColorSelect
           value={data.status}
-          options={STATUS_LIST}
+          groups={STATUS_GROUPS}
           config={STATUS_CONFIG}
           onChange={v => onChange('status', v)}
           placeholder="상태 선택"
