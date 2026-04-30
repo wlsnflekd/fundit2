@@ -198,11 +198,10 @@ function CustomerRegisterPanel({ consultants, profile, onClose, onCreated, isMob
       <div>
         <label style={labelStyle}>상태</label>
         <select style={inputStyle} value={form.status} onChange={e => set('status', e.target.value)}>
-          {STATUS_GROUPS.map(g => (
-            <optgroup key={g.label} label={g.label}>
-              {g.items.map(s => <option key={s} value={s}>{s}</option>)}
-            </optgroup>
-          ))}
+          {STATUS_GROUPS.flatMap((g, gi) => [
+            ...(gi > 0 ? [<option key="__sep__" disabled value="">────────────</option>] : []),
+            ...g.items.map(s => <option key={s} value={s}>{s}</option>),
+          ])}
         </select>
       </div>
       {error && <div style={{ fontSize: 12, color: C.error }}>{error}</div>}
@@ -916,11 +915,10 @@ export default function Customers({ consultantFilter, profile }) {
                             }}
                           >
                             <option value="">상태 없음</option>
-                            {STATUS_GROUPS.map(g => (
-                              <optgroup key={g.label} label={g.label}>
-                                {g.items.map(s => <option key={s} value={s}>{s}</option>)}
-                              </optgroup>
-                            ))}
+                            {STATUS_GROUPS.flatMap((g, gi) => [
+                              ...(gi > 0 ? [<option key="__sep__" disabled value="">────────────</option>] : []),
+                              ...g.items.map(s => <option key={s} value={s}>{s}</option>),
+                            ])}
                           </select>
                         </div>
                       ) : (

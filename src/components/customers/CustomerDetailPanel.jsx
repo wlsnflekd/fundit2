@@ -151,11 +151,10 @@ function ColorSelect({ value, options, groups, config, onChange, placeholder }) 
     >
       <option value="">{placeholder ?? '선택'}</option>
       {groups
-        ? groups.map(g => (
-            <optgroup key={g.label} label={g.label}>
-              {g.items.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-            </optgroup>
-          ))
+        ? groups.flatMap((g, gi) => [
+            ...(gi > 0 ? [<option key="__sep__" disabled value="">────────────</option>] : []),
+            ...g.items.map(opt => <option key={opt} value={opt}>{opt}</option>),
+          ])
         : options?.map(opt => <option key={opt} value={opt}>{opt}</option>)
       }
     </select>
