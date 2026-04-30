@@ -3,7 +3,7 @@ import { useT } from '../../theme.jsx'
 import { supabase, getCustomerSensitive } from '../../supabase.js'
 import { DetailSkeleton } from '../Common.jsx'
 
-// ─── textarea auto-resize 헬퍼 ────────────────────────────────────────────────
+// ─── textarea auto-resize 헬퍼 ────────────────────────────────────────
 // height='auto' → reflow → 브라우저가 cursor를 viewport에 맞추려 부모 스크롤을 이동시키는 버그 방지
 // resize 전 부모 스크롤 컨테이너의 scrollTop을 저장하고, resize 후 복원한다
 function getScrollParent(el) {
@@ -34,7 +34,7 @@ const SENSITIVE_FIELDS = new Set([
   'sbiz_id', 'sbiz_pw', 'resident_id_front',
 ])
 
-// ─── 상태 배지 색상 설정 ───────────────────────────────────────────────────────
+// ─── 상태 배지 색상 설정 ───────────────────────────────────────────────
 export const STATUS_CONFIG = {
   // 그룹1: 자주 사용
   신규:    { bg: '#1d6fe822', color: '#1d6fe8', border: '#1d6fe844' },
@@ -83,7 +83,7 @@ const REGION_PRESETS = [
 
 const BUSINESS_TYPE_LIST = ['개인사업자', '법인사업자']
 
-// ─── 전화번호 자동 하이픈 ──────────────────────────────────────────────────────
+// ─── 전화번호 자동 하이픈 ──────────────────────────────────────────────
 function formatPhone(value) {
   const digits = value.replace(/\D/g, '').slice(0, 11)
   if (digits.length < 4) return digits
@@ -91,7 +91,7 @@ function formatPhone(value) {
   return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`
 }
 
-// ─── 사업자등록번호 자동 하이픈 (000-00-00000) ─────────────────────────────────
+// ─── 사업자등록번호 자동 하이픈 (000-00-00000) ─────────────────────────────
 function formatBizRegNo(value) {
   const digits = value.replace(/\D/g, '').slice(0, 10)
   if (digits.length < 4) return digits
@@ -99,7 +99,7 @@ function formatBizRegNo(value) {
   return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`
 }
 
-// ─── 날짜 연도 4자리 강제 (type="date" 6자리 입력 방지) ───────────────────────
+// ─── 날짜 연도 4자리 강제 (type="date" 6자리 입력 방지) ─────────────────────
 function clampDateYear(val) {
   if (!val) return null
   const parts = val.split('-')
@@ -108,7 +108,7 @@ function clampDateYear(val) {
   return `${year}-${parts[1]}-${parts[2]}`
 }
 
-// ─── 색상 배지 (읽기 모드) ────────────────────────────────────────────────────
+// ─── 색상 배지 (읽기 모드) ────────────────────────────────────────────
 function ColorBadge({ value, config }) {
   if (!value) return <span style={{ color: '#6b84a8', fontSize: 13 }}>-</span>
   const style = config[value] ?? { bg: '#6b728022', color: '#6b7280', border: '#6b728044' }
@@ -128,7 +128,7 @@ function ColorBadge({ value, config }) {
   )
 }
 
-// ─── 색상 셀렉트 (편집 모드) ──────────────────────────────────────────────────
+// ─── 색상 셀렉트 (편집 모드) ──────────────────────────────────────────
 function ColorSelect({ value, options, groups, config, onChange, placeholder }) {
   const C = useT()
   const style = value ? (config[value] ?? {}) : {}
@@ -152,7 +152,7 @@ function ColorSelect({ value, options, groups, config, onChange, placeholder }) 
       <option value="">{placeholder ?? '선택'}</option>
       {groups
         ? groups.flatMap((g, gi) => [
-            ...(gi > 0 ? [<option key="__sep__" disabled value="">────────────</option>] : []),
+            ...(gi > 0 ? [<option key="__sep__" disabled value="">──────────</option>] : []),
             ...g.items.map(opt => <option key={opt} value={opt}>{opt}</option>),
           ])
         : options?.map(opt => <option key={opt} value={opt}>{opt}</option>)
@@ -161,7 +161,7 @@ function ColorSelect({ value, options, groups, config, onChange, placeholder }) 
   )
 }
 
-// ─── 유입경로 드롭다운 + 직접입력 혼합 필드 ──────────────────────────────────────
+// ─── 유입경로 드롭다운 + 직접입력 혼합 필드 ────────────────────────────────
 function LeadSourceField({ value, onChange }) {
   const C = useT()
   // DB 값이 프리셋에 없으면 직접입력 모드로 시작
@@ -228,7 +228,7 @@ function LeadSourceField({ value, onChange }) {
   )
 }
 
-// ─── 지역 드롭다운 + 직접입력 혼합 필드 ──────────────────────────────────────────
+// ─── 지역 드롭다운 + 직접입력 혼합 필드 ────────────────────────────────────
 function RegionField({ value, onChange }) {
   const C = useT()
   const PRESET_SET = new Set(REGION_PRESETS.filter(v => v !== '직접입력'))
@@ -291,7 +291,7 @@ function RegionField({ value, onChange }) {
   )
 }
 
-// ─── Toggle 버튼쌍 (있음/없음) ────────────────────────────────────────────────
+// ─── Toggle 버튼쌍 (있음/없음) ────────────────────────────────────────
 // value를 명시적으로 boolean으로 강제 변환하여 DB에서 오는 값 타입 불일치(문자열/숫자) 방지
 // "있음" = true, "없음" = false
 // invertColor=true 이면 "있음"→빨강(위험 신호), "없음"→녹색(안전 신호)
@@ -350,7 +350,7 @@ function TogglePair({ label, value, onChange, invertColor }) {
   )
 }
 
-// ─── 라벨 + 값 래퍼 ──────────────────────────────────────────────────────────
+// ─── 라벨 + 값 래퍼 ──────────────────────────────────────────────────
 function FieldWrapper({ label, children, spanFull }) {
   const C = useT()
   return (
@@ -363,7 +363,7 @@ function FieldWrapper({ label, children, spanFull }) {
   )
 }
 
-// ─── 공통 텍스트 인풋 스타일 ──────────────────────────────────────────────────
+// ─── 공통 텍스트 인풋 스타일 ──────────────────────────────────────────
 function useInputStyle() {
   const C = useT()
   return {
@@ -379,7 +379,7 @@ function useInputStyle() {
   }
 }
 
-// ─── 탭1: 기본정보 ────────────────────────────────────────────────────────────
+// ─── 탭1: 기본정보 ──────────────────────────────────────────────────
 function TabBasic({ data, onChange, consultants, isAdmin, canViewAuth }) {
   const memoRef = useRef(null)
 
@@ -610,7 +610,7 @@ function TabBasic({ data, onChange, consultants, isAdmin, canViewAuth }) {
   )
 }
 
-// ─── 주민등록번호 전체 필드 (13자리, DB: 하이픈 없이 저장) ──────────────────
+// ─── 주민등록번호 전체 필드 (13자리, DB: 하이픈 없이 저장) ────────────────
 function ResidentIdField({ value, onChange }) {
   const C = useT()
   const inputStyle = useInputStyle()
@@ -687,7 +687,7 @@ function ResidentIdField({ value, onChange }) {
   )
 }
 
-// ─── 탭2: 재무정보 ────────────────────────────────────────────────────────────
+// ─── 탭2: 재무정보 ──────────────────────────────────────────────────
 function TabFinance({ data, onChange }) {
   const C = useT()
   const inputStyle = useInputStyle()
@@ -784,7 +784,7 @@ function TabFinance({ data, onChange }) {
   )
 }
 
-// ─── 탭3: 사업정보 ────────────────────────────────────────────────────────────
+// ─── 탭3: 사업정보 ──────────────────────────────────────────────────
 function TabBusiness({ data, onChange }) {
   const C = useT()
   const inputStyle = useInputStyle()
@@ -841,7 +841,7 @@ function TabBusiness({ data, onChange }) {
   )
 }
 
-// ─── 탭4: 인증정보 ────────────────────────────────────────────────────────────
+// ─── 탭4: 인증정보 ──────────────────────────────────────────────────
 function TabAuth({ data, onChange, isAdmin, canViewAuth, loadError }) {
   const C = useT()
   const inputStyle = useInputStyle()
@@ -969,9 +969,9 @@ function TabAuth({ data, onChange, isAdmin, canViewAuth, loadError }) {
   )
 }
 
-// ─── 메인 패널 컴포넌트 ───────────────────────────────────────────────────────
+// ─── 메인 패널 컴포넌트 ───────────────────────────────────────────────
 
-// ─── 고객사 상세 패널 ────────────────────────────────────────────────────────
+// ─── 고객사 상세 패널 ────────────────────────────────────────────────
 
 const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, profile, onClose, onUpdate, consultants = [], isDuplicate = false }, ref) {
   const C = useT()
@@ -1050,7 +1050,7 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
   // 인증정보 탭 열람 권한: admin이거나, staff 본인이 담당하는 고객
   const canViewAuth = isAdmin || isAssignedConsultant
 
-  // ── 패널 너비 드래그 조절 ────────────────────────────────────────────────
+  // ── 패널 너비 드래그 조절 ────────────────────────────────────────
   const DEFAULT_PANEL_WIDTH = 480
   const MIN_PANEL_WIDTH = DEFAULT_PANEL_WIDTH
   const MAX_PANEL_WIDTH = Math.round(DEFAULT_PANEL_WIDTH * 1.8) // 864
@@ -1217,7 +1217,7 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
       boxShadow: '-8px 0 40px rgba(0,0,0,0.5)',
     }}>
 
-      {/* ── 너비 조절 드래그 핸들 (모바일 제외) ────────────────────────── */}
+      {/* ── 너비 조절 드래그 핸들 (모바일 제외) ────────────────────── */}
       {!isMobile && (
         <div
           onMouseDown={handleWidthDragStart}
@@ -1236,7 +1236,7 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
         />
       )}
 
-      {/* ── 헤더 ─────────────────────────────────────────────────────── */}
+      {/* ── 헤더 ─────────────────────────────────────────────── */}
       <div style={{ padding: '18px 24px 16px', borderBottom: `1px solid ${C.line}`, background: C.s2, flexShrink: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div style={{ minWidth: 0, flex: 1, paddingRight: 12 }}>
@@ -1263,7 +1263,7 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
         </div>
       </div>
 
-      {/* ── 탭 네비게이션 ──────────────────────────────────────────────── */}
+      {/* ── 탭 네비게이션 ──────────────────────────────────────── */}
       <div style={{ display: 'flex', borderBottom: `1px solid ${C.line}`, background: C.s2, flexShrink: 0 }}>
         {TABS.map(tab => {
           const isActive = activeTab === tab.id
@@ -1280,7 +1280,7 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
         })}
       </div>
 
-      {/* ── 콘텐츠 영역 ────────────────────────────────────────────────── */}
+      {/* ── 콘텐츠 영역 ────────────────────────────────────────── */}
       {/* onCompositionStart/End: 이벤트 버블링으로 내부 모든 input에 적용됨 */}
       <div
         style={{ flex: 1, overflowY: 'auto', padding: '20px 24px 0' }}
@@ -1308,7 +1308,7 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
         <div style={{ height: 56 }} />
       </div>
 
-      {/* ── 하단 자동저장 상태 표시 ──────────────────────────────────────── */}
+      {/* ── 하단 자동저장 상태 표시 ────────────────────────────────── */}
       <div style={{
         borderTop: `1px solid ${C.line}`, padding: '10px 24px',
         background: C.s2, flexShrink: 0,

@@ -7,7 +7,7 @@ import { supabase, getCustomers, deleteCustomer, createCustomer, createAssignmen
 const STATUS_LIST = STATUS_GROUPS.flatMap(g => g.items)
 const STATUS_FILTERS = ['전체', ...STATUS_LIST]
 
-// ─── 리스트용 상태 배지 (STATUS_CONFIG 색상 적용) ────────────────────────────
+// ─── 리스트용 상태 배지 (STATUS_CONFIG 색상 적용) ────────────────────────
 function StatusBadge({ status }) {
   if (!status) return <span style={{ color: '#6b84a8', fontSize: 12 }}>-</span>
   const cfg = STATUS_CONFIG[status] ?? { bg: '#6b728022', color: '#6b7280', border: '#6b728044' }
@@ -23,7 +23,7 @@ function StatusBadge({ status }) {
   )
 }
 
-// ─── 모바일 카드 (테이블 대체) ────────────────────────────────────────────────
+// ─── 모바일 카드 (테이블 대체) ────────────────────────────────────────
 function CustomerMobileCard({ c, onSelect, C, isDuplicate }) {
   return (
     <div
@@ -86,7 +86,7 @@ function CustomerMobileCard({ c, onSelect, C, isDuplicate }) {
   )
 }
 
-// ─── 고객사 등록 패널 ─────────────────────────────────────────────────────────
+// ─── 고객사 등록 패널 ─────────────────────────────────────────────────
 function formatPhone(value) {
   const digits = value.replace(/\D/g, '').slice(0, 11)
   if (digits.length < 4) return digits
@@ -199,7 +199,7 @@ function CustomerRegisterPanel({ consultants, profile, onClose, onCreated, isMob
         <label style={labelStyle}>상태</label>
         <select style={inputStyle} value={form.status} onChange={e => set('status', e.target.value)}>
           {STATUS_GROUPS.flatMap((g, gi) => [
-            ...(gi > 0 ? [<option key="__sep__" disabled value="">────────────</option>] : []),
+            ...(gi > 0 ? [<option key="__sep__" disabled value="">──────────</option>] : []),
             ...g.items.map(s => <option key={s} value={s}>{s}</option>),
           ])}
         </select>
@@ -351,7 +351,7 @@ export default function Customers({ consultantFilter, profile }) {
 
   useEffect(() => { loadData() }, [filter, search, consultantFilter, page, leadSourceFilter, adminConsultantFilter])
 
-  // ── customers 테이블 Realtime 구독 ───────────────────────────────────────────
+  // ── customers 테이블 Realtime 구독 ─────────────────────────────────────
   // 의존성을 profile 객체 전체가 아닌 workspaceId 문자열로 고정:
   // profile 객체 참조가 바뀔 때마다 채널이 teardown→reconnect되는 race condition 방지
   const _workspaceIdForRealtime = profile?.workspace?.id || profile?.workspace_id
@@ -557,7 +557,7 @@ export default function Customers({ consultantFilter, profile }) {
     return ''
   }
 
-  // ── phone 중복 집합 계산 ────────────────────────────────────────────────────
+  // ── phone 중복 집합 계산 ────────────────────────────────────────────
   // null·빈 문자열은 체크 제외. 현재 페이지의 customers 배열 안에서만 처리.
   const duplicatePhones = (() => {
     const counts = {}
@@ -916,7 +916,7 @@ export default function Customers({ consultantFilter, profile }) {
                           >
                             <option value="">상태 없음</option>
                             {STATUS_GROUPS.flatMap((g, gi) => [
-                              ...(gi > 0 ? [<option key="__sep__" disabled value="">────────────</option>] : []),
+                              ...(gi > 0 ? [<option key="__sep__" disabled value="">──────────</option>] : []),
                               ...g.items.map(s => <option key={s} value={s}>{s}</option>),
                             ])}
                           </select>
