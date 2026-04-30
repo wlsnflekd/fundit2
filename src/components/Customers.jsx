@@ -851,7 +851,7 @@ export default function Customers({ consultantFilter, profile }) {
             <table style={{ width: '100%', minWidth: isAdmin ? 1000 : 960, borderCollapse: 'collapse', tableLayout: 'fixed' }}>
               <colgroup>
                 <col style={{ width: 40 }} />
-                <col style={{ width: 70 }} />
+                <col style={{ width: 100 }} />
                 <col style={{ width: 80 }} />
                 <col style={{ width: 130 }} />
                 <col style={{ width: 90 }} />
@@ -865,7 +865,7 @@ export default function Customers({ consultantFilter, profile }) {
               <thead>
                 <tr style={{ background: C.s1 }}>
                   <th style={{ ...th, width: 40, minWidth: 40, textAlign: 'center' }}>#</th>
-                  <th style={{ ...th, width: 70, minWidth: 70 }}>상태</th>
+                  <th style={{ ...th, width: 100, minWidth: 100 }}>상태</th>
                   <th style={{ ...th, width: 80, minWidth: 80 }}>담당자</th>
                   <th style={{ ...th, width: 130, minWidth: 130 }}>업체명</th>
                   <th style={{ ...th, width: 90, minWidth: 90 }}>이름</th>
@@ -894,7 +894,7 @@ export default function Customers({ consultantFilter, profile }) {
                     </td>
                     {/* 상태 */}
                     <td
-                      style={{ ...td, width: 70, minWidth: 70, maxWidth: 70, cursor: 'pointer', position: 'relative' }}
+                      style={{ ...td, width: 100, minWidth: 100, maxWidth: 100, cursor: 'pointer', position: 'relative' }}
                       onClick={e => {
                         e.stopPropagation()
                         setEditingStatusId(c.id)
@@ -912,6 +912,7 @@ export default function Customers({ consultantFilter, profile }) {
                               padding: '4px 6px', borderRadius: 6, outline: 'none',
                               background: C.s3, border: `1px solid ${C.gold}`,
                               color: C.text, fontSize: 12, cursor: 'pointer',
+                              width: '100%',
                             }}
                           >
                             <option value="">상태 없음</option>
