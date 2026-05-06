@@ -1,11 +1,10 @@
-import { useState, useEffect, useRef, Fragment } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useT, useIsMobile } from '../theme.jsx'
 import { Button, BottomSheet, TableSkeleton } from './Common.jsx'
 import CustomerDetailPanel, { STATUS_CONFIG, STATUS_GROUPS } from './customers/CustomerDetailPanel.jsx'
 import { supabase, getCustomers, deleteCustomer, createCustomer, createAssignmentNotification } from '../supabase.js'
 
 const STATUS_LIST = STATUS_GROUPS.flatMap(g => g.items)
-const STATUS_FILTERS = ['전체', ...STATUS_LIST]
 
 // ─── 리스트용 상태 배지 (STATUS_CONFIG 색상 적용) ────────────────────────
 function StatusBadge({ status }) {
@@ -253,9 +252,10 @@ export default function Customers({ consultantFilter, profile }) {
   const [customers, setCustomers] = useState([])
   const [consultants, setConsultants] = useState([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState('전체')
+  const [filter, setFilter] = useState('')
   const [search, setSearch] = useState('')
-  const [leadSourceFilter, setLeadSourceFilter] = useState('전체')
+  const [leadSourceFilter, setLeadSourceFilter] = useState('')
+  const [businessTypeFilter, setBusinessTypeFilter] = useState('')
   const [adminConsultantFilter, setAdminConsultantFilter] = useState('')
   const [selected, setSelected] = useState(null)
   const panelRef = useRef(null)
@@ -279,12 +279,14 @@ export default function Customers({ consultantFilter, profile }) {
   const pageRef = useRef(page)
   const leadSourceFilterRef = useRef(leadSourceFilter)
   const adminConsultantFilterRef = useRef(adminConsultantFilter)
+  const businessTypeFilterRef = useRef(businessTypeFilter)
   useEffect(() => { filterRef.current = filter }, [filter])
   useEffect(() => { searchRef.current = search }, [search])
   useEffect(() => { consultantFilterRef.current = consultantFilter }, [consultantFilter])
   useEffect(() => { pageRef.current = page }, [page])
   useEffect(() => { leadSourceFilterRef.current = leadSourceFilter }, [leadSourceFilter])
   useEffect(() => { adminConsultantFilterRef.current = adminConsultantFilter }, [adminConsultantFilter])
+  useEffect(() => { businessTypeFilterRef.current = businessTypeFilter }, [businessTypeFilter])
 
   // 담당자 인라인 편집
   const [editingConsultantId, setEditingConsultantId] = useState(null)
@@ -322,6 +324,7 @@ export default function Customers({ consultantFilter, profile }) {
           search: searchRef.current,
           consultantId: adminConsultantFilterRef.current || consultantFilterRef.current,
           leadSource: leadSourceFilterRef.current,
+          businessType: businessTypeFilterRef.current,
         }),
         supabase.from('profiles').select('id, name, role, created_at').eq('approval_status', 'approved'),
       ])
@@ -349,7 +352,7 @@ export default function Customers({ consultantFilter, profile }) {
     }
   }
 
-  useEffect(() => { loadData() }, [filter, search, consultantFilter, page, leadSourceFilter, adminConsultantFilter])
+  useEffect(() => { loadData() }, [filter, search, consultantFilter, page, leadSourceFilter, adminConsultantFilter, businessTypeFilter])
 
   // ── customers 테이블 Realtime 구독 ─────────────────────────────────────
   // 의존성을 profile 객체 전체가 아닌 workspaceId 문자열로 고정:
@@ -625,6 +628,7 @@ export default function Customers({ consultantFilter, profile }) {
         search: searchRef.current,
         consultantId: adminConsultantFilterRef.current || consultantFilterRef.current,
         leadSource: leadSourceFilterRef.current,
+        businessType: businessTypeFilterRef.current,
       })
       if (error || !data?.length) {
         alert('내보낼 고객사가 없습니다.')
@@ -667,89 +671,93 @@ export default function Customers({ consultantFilter, profile }) {
         </div>
       </div>
 
-      {/* 상태 필터 */}
-      <div style={{
-        display: 'flex',
-        flexWrap: isMobile ? 'nowrap' : 'wrap',
-        overflowX: isMobile ? 'auto' : undefined,
-        WebkitOverflowScrolling: 'touch',
-        gap: 6, marginBottom: isMobile ? 10 : 14,
-        paddingBottom: isMobile ? 4 : 0,
-      }}>
-        {/* 전체 버튼 */}
-        <button onClick={() => { setFilter('전체'); setPage(1) }} style={{
-          padding: '3px 10px', borderRadius: 999, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700,
-          flexShrink: 0,
-          background: filter === '전체' ? C.gold : C.s3,
-          color: filter === '전체' ? C.base : C.sub,
-        }}>전체</button>
-
-        {/* 그룹 버튼 + 구분선 */}
-        {STATUS_GROUPS.map((group) => (
-          <Fragment key={group.label}>
-            <div style={{ width: 1, alignSelf: 'stretch', background: C.line, flexShrink: 0, margin: '0 2px' }} />
-            {group.items.map(s => (
-              <button key={s} onClick={() => { setFilter(s); setPage(1) }} style={{
-                padding: '3px 10px', borderRadius: 999, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700,
-                flexShrink: 0,
-                background: filter === s ? C.gold : C.s3,
-                color: filter === s ? C.base : C.sub,
-              }}>{s}</button>
+      {/* 필터 바 — 데스크탑 */}
+      {!isMobile && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+          {/* 상태 필터 드롭다운 */}
+          <select
+            value={filter}
+            onChange={e => { setFilter(e.target.value); setPage(1) }}
+            style={{
+              padding: '4px 10px', borderRadius: 8, outline: 'none',
+              background: filter ? '#d4952a22' : C.s3,
+              border: `1px solid ${filter ? '#d4952a' : C.line}`,
+              color: filter ? '#d4952a' : C.sub,
+              fontSize: 11, fontWeight: 700, cursor: 'pointer',
+            }}
+          >
+            <option value="">상태 전체</option>
+            {STATUS_LIST.map(s => <option key={s} value={s} style={{ background: C.s2, color: C.text }}>{s}</option>)}
+          </select>
+          {/* 사업자유형 필터 */}
+          <select
+            value={businessTypeFilter}
+            onChange={e => { setBusinessTypeFilter(e.target.value); setPage(1) }}
+            style={{
+              padding: '4px 10px', borderRadius: 8, outline: 'none',
+              background: businessTypeFilter ? '#d4952a22' : C.s3,
+              border: `1px solid ${businessTypeFilter ? '#d4952a' : C.line}`,
+              color: businessTypeFilter ? '#d4952a' : C.sub,
+              fontSize: 11, fontWeight: 700, cursor: 'pointer',
+            }}
+          >
+            <option value="">사업자유형 전체</option>
+            <option value="개인사업자" style={{ background: C.s2, color: C.text }}>개인사업자</option>
+            <option value="법인사업자" style={{ background: C.s2, color: C.text }}>법인사업자</option>
+          </select>
+          {/* 유입경로 필터 */}
+          <select
+            value={leadSourceFilter}
+            onChange={e => { setLeadSourceFilter(e.target.value); setPage(1) }}
+            style={{
+              padding: '4px 10px', borderRadius: 8, outline: 'none',
+              background: leadSourceFilter ? '#d4952a22' : C.s3,
+              border: `1px solid ${leadSourceFilter ? '#d4952a' : C.line}`,
+              color: leadSourceFilter ? '#d4952a' : C.sub,
+              fontSize: 11, fontWeight: 700, cursor: 'pointer',
+            }}
+          >
+            <option value="">유입경로 전체</option>
+            <option value="직접입력" style={{ background: C.s2, color: C.text }}>직접입력</option>
+            {LEAD_SOURCE_OPTIONS.map(o => (
+              <option key={o} value={o} style={{ background: C.s2, color: C.text }}>{o}</option>
             ))}
-          </Fragment>
-        ))}
-        {/* 검색 + 색상 토글 — 모바일에서는 필터 아래 별도 행으로 */}
-        {!isMobile && (
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+          </select>
+          {/* 담당자 필터 (admin 전용) */}
+          {isAdmin && (
             <select
-              value={leadSourceFilter}
-              onChange={e => { setLeadSourceFilter(e.target.value); setPage(1) }}
+              value={adminConsultantFilter}
+              onChange={e => { setAdminConsultantFilter(e.target.value); setPage(1) }}
               style={{
                 padding: '4px 10px', borderRadius: 8, outline: 'none',
-                background: leadSourceFilter !== '전체' ? '#d4952a22' : C.s3,
-                border: `1px solid ${leadSourceFilter !== '전체' ? '#d4952a' : C.line}`,
-                color: leadSourceFilter !== '전체' ? '#d4952a' : C.sub,
+                background: adminConsultantFilter ? '#d4952a22' : C.s3,
+                border: `1px solid ${adminConsultantFilter ? '#d4952a' : C.line}`,
+                color: adminConsultantFilter ? '#d4952a' : C.sub,
                 fontSize: 11, fontWeight: 700, cursor: 'pointer',
               }}
             >
-              {['전체', '직접입력', ...LEAD_SOURCE_OPTIONS].map(o => (
-                <option key={o} value={o} style={{ background: C.s2, color: C.text }}>{o === '전체' ? '유입경로 전체' : o}</option>
+              <option value="" style={{ background: C.s2, color: C.text }}>담당자 전체</option>
+              <option value="__unassigned__" style={{ background: C.s2, color: C.text }}>미배정</option>
+              {consultants.map(m => (
+                <option key={m.id} value={m.id} style={{ background: C.s2, color: C.text }}>{m.name}</option>
               ))}
             </select>
-            {isAdmin && (
-              <select
-                value={adminConsultantFilter}
-                onChange={e => { setAdminConsultantFilter(e.target.value); setPage(1) }}
-                style={{
-                  padding: '4px 10px', borderRadius: 8, outline: 'none',
-                  background: adminConsultantFilter ? '#d4952a22' : C.s3,
-                  border: `1px solid ${adminConsultantFilter ? '#d4952a' : C.line}`,
-                  color: adminConsultantFilter ? '#d4952a' : C.sub,
-                  fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                }}
-              >
-                <option value="" style={{ background: C.s2, color: C.text }}>담당자 전체</option>
-                <option value="__unassigned__" style={{ background: C.s2, color: C.text }}>미배정</option>
-                {consultants.map(m => (
-                  <option key={m.id} value={m.id} style={{ background: C.s2, color: C.text }}>{m.name}</option>
-                ))}
-              </select>
-            )}
-            <label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', userSelect: 'none' }}>
-              <input
-                type="checkbox"
-                checked={colorRows}
-                onChange={e => setColorRows(e.target.checked)}
-                style={{ cursor: 'pointer', accentColor: C.gold, width: 14, height: 14 }}
-              />
-              <span style={{ fontSize: 11, color: C.sub, whiteSpace: 'nowrap' }}>상태 색상</span>
-            </label>
-            <input value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} placeholder="업체명·이름·연락처·업종·지역·유입채널·상담내용 검색"
-              style={{ padding: '4px 12px', borderRadius: 8, border: `1px solid ${C.line}`, background: C.s3, color: C.text, fontSize: 12, width: 180, outline: 'none' }} />
-          </div>
-        )}
-      </div>
-      {/* 모바일 전용 검색 바 */}
+          )}
+          {/* 상태 색상 토글 + 검색 */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', userSelect: 'none', marginLeft: 'auto' }}>
+            <input
+              type="checkbox"
+              checked={colorRows}
+              onChange={e => setColorRows(e.target.checked)}
+              style={{ cursor: 'pointer', accentColor: C.gold, width: 14, height: 14 }}
+            />
+            <span style={{ fontSize: 11, color: C.sub, whiteSpace: 'nowrap' }}>상태 색상</span>
+          </label>
+          <input value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} placeholder="업체명·이름·연락처·업종·지역·유입채널·상담내용 검색"
+            style={{ padding: '4px 12px', borderRadius: 8, border: `1px solid ${C.line}`, background: C.s3, color: C.text, fontSize: 12, width: 180, outline: 'none' }} />
+        </div>
+      )}
+      {/* 필터 바 — 모바일 */}
       {isMobile && (
         <>
           <input
@@ -763,23 +771,57 @@ export default function Customers({ consultantFilter, profile }) {
               color: C.text, fontSize: 13, outline: 'none', marginBottom: 8,
             }}
           />
-          {/* 유입경로 필터 + 담당자 필터(admin) + 상태 색상 체크박스 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+            {/* 상태 필터 */}
+            <select
+              value={filter}
+              onChange={e => { setFilter(e.target.value); setPage(1) }}
+              style={{
+                padding: '6px 10px', borderRadius: 8, outline: 'none',
+                background: filter ? '#d4952a22' : C.s3,
+                border: `1px solid ${filter ? '#d4952a' : C.line}`,
+                color: filter ? '#d4952a' : C.sub,
+                fontSize: 12, fontWeight: 700, cursor: 'pointer', flex: 1,
+              }}
+            >
+              <option value="">상태 전체</option>
+              {STATUS_LIST.map(s => <option key={s} value={s} style={{ background: C.s2, color: C.text }}>{s}</option>)}
+            </select>
+            {/* 사업자유형 필터 */}
+            <select
+              value={businessTypeFilter}
+              onChange={e => { setBusinessTypeFilter(e.target.value); setPage(1) }}
+              style={{
+                padding: '6px 10px', borderRadius: 8, outline: 'none',
+                background: businessTypeFilter ? '#d4952a22' : C.s3,
+                border: `1px solid ${businessTypeFilter ? '#d4952a' : C.line}`,
+                color: businessTypeFilter ? '#d4952a' : C.sub,
+                fontSize: 12, fontWeight: 700, cursor: 'pointer', flex: 1,
+              }}
+            >
+              <option value="">사업자유형 전체</option>
+              <option value="개인사업자" style={{ background: C.s2, color: C.text }}>개인사업자</option>
+              <option value="법인사업자" style={{ background: C.s2, color: C.text }}>법인사업자</option>
+            </select>
+            {/* 유입경로 필터 */}
             <select
               value={leadSourceFilter}
               onChange={e => { setLeadSourceFilter(e.target.value); setPage(1) }}
               style={{
                 padding: '6px 10px', borderRadius: 8, outline: 'none',
-                background: leadSourceFilter !== '전체' ? '#d4952a22' : C.s3,
-                border: `1px solid ${leadSourceFilter !== '전체' ? '#d4952a' : C.line}`,
-                color: leadSourceFilter !== '전체' ? '#d4952a' : C.sub,
+                background: leadSourceFilter ? '#d4952a22' : C.s3,
+                border: `1px solid ${leadSourceFilter ? '#d4952a' : C.line}`,
+                color: leadSourceFilter ? '#d4952a' : C.sub,
                 fontSize: 12, fontWeight: 700, cursor: 'pointer', flex: 1,
               }}
             >
-              {['전체', '직접입력', ...LEAD_SOURCE_OPTIONS].map(o => (
-                <option key={o} value={o} style={{ background: C.s2, color: C.text }}>{o === '전체' ? '유입경로 전체' : o}</option>
+              <option value="">유입경로 전체</option>
+              <option value="직접입력" style={{ background: C.s2, color: C.text }}>직접입력</option>
+              {LEAD_SOURCE_OPTIONS.map(o => (
+                <option key={o} value={o} style={{ background: C.s2, color: C.text }}>{o}</option>
               ))}
             </select>
+            {/* 담당자 필터 (admin 전용) */}
             {isAdmin && (
               <select
                 value={adminConsultantFilter}
