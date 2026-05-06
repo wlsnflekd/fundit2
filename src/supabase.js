@@ -397,7 +397,9 @@ export const getCustomers = async ({
     )
   }
 
-  if (consultantId) {
+  if (consultantId === '__unassigned__') {
+    query = query.is('consultant', null)
+  } else if (consultantId) {
     query = query.eq('consultant', consultantId)
   }
 

@@ -729,6 +729,7 @@ export default function Customers({ consultantFilter, profile }) {
                 }}
               >
                 <option value="" style={{ background: C.s2, color: C.text }}>담당자 전체</option>
+                <option value="__unassigned__" style={{ background: C.s2, color: C.text }}>미배정</option>
                 {consultants.map(m => (
                   <option key={m.id} value={m.id} style={{ background: C.s2, color: C.text }}>{m.name}</option>
                 ))}
@@ -792,6 +793,7 @@ export default function Customers({ consultantFilter, profile }) {
                 }}
               >
                 <option value="" style={{ background: C.s2, color: C.text }}>담당자 전체</option>
+                <option value="__unassigned__" style={{ background: C.s2, color: C.text }}>미배정</option>
                 {consultants.map(m => (
                   <option key={m.id} value={m.id} style={{ background: C.s2, color: C.text }}>{m.name}</option>
                 ))}
