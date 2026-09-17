@@ -360,7 +360,7 @@ export const getDashboardStats = async (profile = null) => {
 const SAFE_CUSTOMER_COLS = [
   'id', 'workspace_id', 'company', 'ceo', 'industry', 'employees', 'revenue',
   'consultant', 'pool', 'tags', 'score', 'status', 'lead_source', 'phone',
-  'business_type', 'business_reg_no', 'region', 'business_age',
+  'business_type', 'business_reg_no', 'region', 'address', 'business_age',
   'received_date', 'birth_date', 'business_reg_date',
   'contract_amount', 'commission_rate', 'consultation_memo', 'quick_memo',
   'monthly_revenue', 'prev_year_revenue', 'prev2_year_revenue',
@@ -381,6 +381,7 @@ export const getCustomers = async ({
   consultantId,  // uuid → 담당자 필터
   leadSource,    // 문자열 → 유입경로 필터 ('전체' 또는 undefined → 필터 안 함)
   businessType,  // '개인사업자' | '법인사업자' → 사업자유형 필터
+  region,        // 시/도 17개 중 하나 → 지역 필터
 } = {}) => {
   let query = supabase
     .from('customers')
@@ -394,7 +395,7 @@ export const getCustomers = async ({
 
   if (search) {
     query = query.or(
-      `company.ilike.%${search}%,ceo.ilike.%${search}%,industry.ilike.%${search}%,phone.ilike.%${search}%,consultation_memo.ilike.%${search}%,lead_source.ilike.%${search}%,region.ilike.%${search}%`
+      `company.ilike.%${search}%,ceo.ilike.%${search}%,industry.ilike.%${search}%,phone.ilike.%${search}%,consultation_memo.ilike.%${search}%,lead_source.ilike.%${search}%,region.ilike.%${search}%,address.ilike.%${search}%`
     )
   }
 
@@ -410,6 +411,10 @@ export const getCustomers = async ({
 
   if (businessType && businessType !== '전체') {
     query = query.eq('business_type', businessType)
+  }
+
+  if (region && region !== '전체') {
+    query = query.eq('region', region)
   }
 
   // pageSize = 0 이면 range 미적용 (CSV 내보내기용 전건 조회)

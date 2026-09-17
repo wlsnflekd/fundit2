@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 're
 import { useT } from '../../theme.jsx'
 import { supabase, getCustomerSensitive } from '../../supabase.js'
 import { DetailSkeleton } from '../Common.jsx'
+import { SIDO_LIST, parseSido } from '../../utils/region.js'
 
 // ─── textarea auto-resize 헬퍼 ────────────────────────────────────────
 // height='auto' → reflow → 브라우저가 cursor를 viewport에 맞추려 부모 스크롤을 이동시키는 버그 방지
@@ -74,12 +75,6 @@ const LEAD_SOURCE_CONFIG = {
 const LEAD_SOURCE_PRESETS = ['직접입력', ...Object.keys(LEAD_SOURCE_CONFIG)]
 
 const STATUS_LIST = STATUS_GROUPS.flatMap(g => g.items)
-
-const REGION_PRESETS = [
-  '직접입력',
-  '서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종',
-  '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주',
-]
 
 const BUSINESS_TYPE_LIST = ['개인사업자', '법인사업자']
 
@@ -228,19 +223,10 @@ function LeadSourceField({ value, onChange }) {
   )
 }
 
-// ─── 지역 드롭다운 + 직접입력 혼합 필드 ────────────────────────────────────
+// ─── 지역 드롭다운 (17개 표준 시/도) ────────────────────────────────────
+// region은 DB 트리거가 address로부터 자동 파생·정규화하므로 자유 텍스트를 허용하지 않는다.
 function RegionField({ value, onChange }) {
   const C = useT()
-  const PRESET_SET = new Set(REGION_PRESETS.filter(v => v !== '직접입력'))
-  const isCustom = value && !PRESET_SET.has(value)
-  const [direct, setDirect] = useState(isCustom)
-
-  useEffect(() => {
-    const custom = value && !PRESET_SET.has(value)
-    setDirect(custom)
-  }, [value])
-
-  const selectVal = direct ? '직접입력' : (value ?? '')
 
   const inputStyle = {
     padding: '6px 10px', borderRadius: 8, border: `1px solid ${C.line}`,
@@ -248,46 +234,21 @@ function RegionField({ value, onChange }) {
     outline: 'none', boxSizing: 'border-box',
   }
 
-  const handleSelect = (e) => {
-    const v = e.target.value
-    if (v === '직접입력') {
-      setDirect(true)
-      onChange(null)
-    } else if (v === '') {
-      setDirect(false)
-      onChange(null)
-    } else {
-      setDirect(false)
-      onChange(v)
-    }
-  }
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <select
-        value={selectVal}
-        onChange={handleSelect}
-        style={{
-          ...inputStyle,
-          cursor: 'pointer',
-          color: selectVal ? C.text : C.sub,
-        }}
-      >
-        <option value="">지역 선택</option>
-        {REGION_PRESETS.map(opt => (
-          <option key={opt} value={opt}>{opt}</option>
-        ))}
-      </select>
-      {direct && (
-        <input
-          style={inputStyle}
-          value={value ?? ''}
-          onChange={e => onChange(e.target.value || null)}
-          placeholder="지역 직접 입력"
-          autoFocus
-        />
-      )}
-    </div>
+    <select
+      value={value ?? ''}
+      onChange={e => onChange(e.target.value || null)}
+      style={{
+        ...inputStyle,
+        cursor: 'pointer',
+        color: value ? C.text : C.sub,
+      }}
+    >
+      <option value="">지역 선택</option>
+      {SIDO_LIST.map(opt => (
+        <option key={opt} value={opt}>{opt}</option>
+      ))}
+    </select>
   )
 }
 
@@ -482,6 +443,20 @@ function TabBasic({ data, onChange, consultants, isAdmin, canViewAuth }) {
           onChange={e => onChange('business_reg_no', formatBizRegNo(e.target.value) || null)}
           placeholder="000-00-00000"
           maxLength={12}
+        />
+      </FieldWrapper>
+
+      <FieldWrapper label="주소">
+        <input
+          style={inputStyle}
+          value={data.address ?? ''}
+          onChange={e => {
+            const v = e.target.value || null
+            onChange('address', v)
+            const sido = parseSido(v)
+            if (sido) onChange('region', sido)
+          }}
+          placeholder="시/군/구까지 입력하면 지역이 자동 선택됩니다"
         />
       </FieldWrapper>
 

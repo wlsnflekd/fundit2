@@ -190,6 +190,9 @@ function insertToSupabase(payload) {
     p_lead_source:       payload.lead_source,
     p_business_type:     payload.business_type,
     p_industry:          payload.industry,
+    // payload.region 은 폼 응답 자유 텍스트일 수 있음 ("경기도 남양주시" 등).
+    // DB 트리거 trg_customers_normalize_region 이 저장 시점에 17개 시/도 표준값으로
+    // 정규화하고 원문은 customers.address 에 보존함 (supabase/migrations/0004_customers_region_normalize.sql)
     p_region:            payload.region,
     p_business_age:      payload.business_age,
     p_monthly_revenue:   payload.monthly_revenue,

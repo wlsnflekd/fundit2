@@ -141,6 +141,13 @@ tags         text[]
 score        int default 0
 created_at   timestamptz default now()
 ```
+(이후 `supabase/add_customer_detail_fields.sql` 등으로 상세 컬럼 다수 추가됨 — status, lead_source, phone, business_type, region, address …)
+
+**지역 계약 (`0004_customers_region_normalize.sql`)**
+- `region` = 17개 시/도 표준값(`src/utils/region.js`의 `SIDO_LIST`)만 저장 — 필터·`(workspace_id, region)` 인덱스 기준
+- `address` = 자유 텍스트 주소/지역 원문
+- BEFORE INSERT/UPDATE 트리거 `trg_customers_normalize_region`이 어떤 유입 경로(앱, `submit_customer_form` RPC, Make, REST)든 `region`을 정규화하고 원문을 `address`에 보존
+- 파싱 규칙은 JS `parseSido()`와 SQL `public.parse_sido()`가 동일해야 함 — 한쪽 수정 시 반드시 다른 쪽도 수정
 
 #### `funds`
 ```

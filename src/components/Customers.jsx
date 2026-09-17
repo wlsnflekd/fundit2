@@ -3,6 +3,7 @@ import { useT, useIsMobile } from '../theme.jsx'
 import { Button, BottomSheet, TableSkeleton } from './Common.jsx'
 import CustomerDetailPanel, { STATUS_CONFIG, STATUS_GROUPS } from './customers/CustomerDetailPanel.jsx'
 import { supabase, getCustomers, deleteCustomer, createCustomer, createAssignmentNotification } from '../supabase.js'
+import { SIDO_LIST, parseSido } from '../utils/region.js'
 
 const STATUS_LIST = STATUS_GROUPS.flatMap(g => g.items)
 
@@ -100,6 +101,7 @@ function CustomerRegisterPanel({ consultants, profile, onClose, onCreated, isMob
   const [form, setForm] = useState({
     company: '', ceo: '', industry: '', consultant: '', status: STATUS_LIST[0] ?? '신규',
     received_date: '', phone: '', business_type: '', lead_source: '',
+    address: '', region: '',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -124,6 +126,8 @@ function CustomerRegisterPanel({ consultants, profile, onClose, onCreated, isMob
       phone: form.phone.trim() || null,
       business_type: form.business_type || null,
       lead_source: form.lead_source || null,
+      address: form.address.trim() || null,
+      region: form.region || null,
       pool: false,
       tags: [],
       score: 0,
@@ -149,6 +153,20 @@ function CustomerRegisterPanel({ consultants, profile, onClose, onCreated, isMob
       <div><label style={labelStyle}>업체명 *</label><input style={inputStyle} value={form.company} onChange={e => set('company', e.target.value)} placeholder="(주)그린테크" /></div>
       <div><label style={labelStyle}>대표자 이름</label><input style={inputStyle} value={form.ceo} onChange={e => set('ceo', e.target.value)} placeholder="홍길동" /></div>
       <div><label style={labelStyle}>업종</label><input style={inputStyle} value={form.industry} onChange={e => set('industry', e.target.value)} placeholder="업종" /></div>
+      <div><label style={labelStyle}>주소</label><input style={inputStyle} value={form.address} onChange={e => {
+        const v = e.target.value
+        const sido = parseSido(v)
+        set('address', v)
+        if (sido) set('region', sido)
+      }} placeholder="서울시 강남구 테헤란로 123" /></div>
+      <div>
+        <label style={labelStyle}>지역</label>
+        <select style={inputStyle} value={form.region} onChange={e => set('region', e.target.value)}>
+          <option value="">선택 안함</option>
+          {SIDO_LIST.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <div style={{ fontSize: 11, color: C.sub, marginTop: 4 }}>주소 입력 시 자동 선택됩니다</div>
+      </div>
       <div>
         <label style={labelStyle}>사업자유형</label>
         <select style={inputStyle} value={form.business_type} onChange={e => set('business_type', e.target.value)}>
@@ -256,6 +274,7 @@ export default function Customers({ consultantFilter, profile }) {
   const [search, setSearch] = useState('')
   const [leadSourceFilter, setLeadSourceFilter] = useState('')
   const [businessTypeFilter, setBusinessTypeFilter] = useState('')
+  const [regionFilter, setRegionFilter] = useState('')
   const [adminConsultantFilter, setAdminConsultantFilter] = useState('')
   const [selected, setSelected] = useState(null)
   const panelRef = useRef(null)
@@ -280,6 +299,7 @@ export default function Customers({ consultantFilter, profile }) {
   const leadSourceFilterRef = useRef(leadSourceFilter)
   const adminConsultantFilterRef = useRef(adminConsultantFilter)
   const businessTypeFilterRef = useRef(businessTypeFilter)
+  const regionFilterRef = useRef(regionFilter)
   useEffect(() => { filterRef.current = filter }, [filter])
   useEffect(() => { searchRef.current = search }, [search])
   useEffect(() => { consultantFilterRef.current = consultantFilter }, [consultantFilter])
@@ -287,6 +307,7 @@ export default function Customers({ consultantFilter, profile }) {
   useEffect(() => { leadSourceFilterRef.current = leadSourceFilter }, [leadSourceFilter])
   useEffect(() => { adminConsultantFilterRef.current = adminConsultantFilter }, [adminConsultantFilter])
   useEffect(() => { businessTypeFilterRef.current = businessTypeFilter }, [businessTypeFilter])
+  useEffect(() => { regionFilterRef.current = regionFilter }, [regionFilter])
 
   // 담당자 인라인 편집
   const [editingConsultantId, setEditingConsultantId] = useState(null)
@@ -325,6 +346,7 @@ export default function Customers({ consultantFilter, profile }) {
           consultantId: adminConsultantFilterRef.current || consultantFilterRef.current,
           leadSource: leadSourceFilterRef.current,
           businessType: businessTypeFilterRef.current,
+          region: regionFilterRef.current,
         }),
         supabase.from('profiles').select('id, name, role, created_at').eq('approval_status', 'approved'),
       ])
@@ -352,7 +374,7 @@ export default function Customers({ consultantFilter, profile }) {
     }
   }
 
-  useEffect(() => { loadData() }, [filter, search, consultantFilter, page, leadSourceFilter, adminConsultantFilter, businessTypeFilter])
+  useEffect(() => { loadData() }, [filter, search, consultantFilter, page, leadSourceFilter, adminConsultantFilter, businessTypeFilter, regionFilter])
 
   // ── customers 테이블 Realtime 구독 ─────────────────────────────────────
   // 의존성을 profile 객체 전체가 아닌 workspaceId 문자열로 고정:
@@ -629,6 +651,7 @@ export default function Customers({ consultantFilter, profile }) {
         consultantId: adminConsultantFilterRef.current || consultantFilterRef.current,
         leadSource: leadSourceFilterRef.current,
         businessType: businessTypeFilterRef.current,
+        region: regionFilterRef.current,
       })
       if (error || !data?.length) {
         alert('내보낼 고객사가 없습니다.')
@@ -637,8 +660,8 @@ export default function Customers({ consultantFilter, profile }) {
       const memberMap = {}
       consultants.forEach(m => { memberMap[m.id] = m.name })
       const allFiltered = data.map(c => ({ ...c, consultantName: memberMap[c.consultant] || '-' }))
-      const headers = ['고객번호', '업체명', '대표자명', '연락처', '업종', '지역', '유입경로', '상태', '담당자', '접수일']
-      const fields = ['id', 'company', 'ceo', 'phone', 'industry', 'region', 'lead_source', 'status', 'consultantName', 'received_date']
+      const headers = ['고객번호', '업체명', '대표자명', '연락처', '업종', '지역', '주소', '유입경로', '상태', '담당자', '접수일']
+      const fields = ['id', 'company', 'ceo', 'phone', 'industry', 'region', 'address', 'lead_source', 'status', 'consultantName', 'received_date']
       const escape = (val) => {
         const s = val == null ? '' : String(val)
         return s.includes(',') || s.includes('\n') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s
@@ -721,6 +744,23 @@ export default function Customers({ consultantFilter, profile }) {
             <option value="직접입력" style={{ background: C.s2, color: C.text }}>직접입력</option>
             {LEAD_SOURCE_OPTIONS.map(o => (
               <option key={o} value={o} style={{ background: C.s2, color: C.text }}>{o}</option>
+            ))}
+          </select>
+          {/* 지역 필터 */}
+          <select
+            value={regionFilter}
+            onChange={e => { setRegionFilter(e.target.value); setPage(1) }}
+            style={{
+              padding: '4px 10px', borderRadius: 8, outline: 'none',
+              background: regionFilter ? '#d4952a22' : C.s3,
+              border: `1px solid ${regionFilter ? '#d4952a' : C.line}`,
+              color: regionFilter ? '#d4952a' : C.sub,
+              fontSize: 11, fontWeight: 700, cursor: 'pointer',
+            }}
+          >
+            <option value="">지역 전체</option>
+            {SIDO_LIST.map(s => (
+              <option key={s} value={s} style={{ background: C.s2, color: C.text }}>{s}</option>
             ))}
           </select>
           {/* 담당자 필터 (admin 전용) */}
@@ -819,6 +859,23 @@ export default function Customers({ consultantFilter, profile }) {
               <option value="직접입력" style={{ background: C.s2, color: C.text }}>직접입력</option>
               {LEAD_SOURCE_OPTIONS.map(o => (
                 <option key={o} value={o} style={{ background: C.s2, color: C.text }}>{o}</option>
+              ))}
+            </select>
+            {/* 지역 필터 */}
+            <select
+              value={regionFilter}
+              onChange={e => { setRegionFilter(e.target.value); setPage(1) }}
+              style={{
+                padding: '6px 10px', borderRadius: 8, outline: 'none',
+                background: regionFilter ? '#d4952a22' : C.s3,
+                border: `1px solid ${regionFilter ? '#d4952a' : C.line}`,
+                color: regionFilter ? '#d4952a' : C.sub,
+                fontSize: 12, fontWeight: 700, cursor: 'pointer', flex: 1,
+              }}
+            >
+              <option value="">지역 전체</option>
+              {SIDO_LIST.map(s => (
+                <option key={s} value={s} style={{ background: C.s2, color: C.text }}>{s}</option>
               ))}
             </select>
             {/* 담당자 필터 (admin 전용) */}
