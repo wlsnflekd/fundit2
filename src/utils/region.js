@@ -1,9 +1,17 @@
-// ─── 지역(시/도) 공용 유틸 ──────────────────────────────────────────────
-// customers.region 은 아래 17개 시/도 값만 가집니다. (필터·인덱스 기준)
-// 자유 텍스트 주소는 customers.address 에 보관하고, 시/도는 parseSido()로 파생합니다.
+// ─── 지역(시/도 · 시/군/구) 공용 유틸 ─────────────────────────────────────
+// customers.region        = 아래 17개 시/도 값만 (필터·인덱스 기준)
+// customers.region_detail = 시/군/구 (SIGUNGU_MAP 표준명 또는 직접 입력값)
+// customers.address       = 자유 텍스트 주소 원문 — parseSido()/parseSigungu()로 위 두 값을 파생
 //
-// ⚠️ DB 트리거 public.parse_sido() (supabase/migrations/0004_customers_region_normalize.sql)
-//    와 동일한 규칙입니다. 한쪽을 수정하면 다른 쪽도 함께 수정하세요.
+// ⚠️ DB 함수 public.parse_sido() (0004 도입, 0005 에서 재정의),
+//    public.parse_sigungu() / sigungu_map() (0005_customers_region_detail.sql)
+//    와 동일한 규칙·목록입니다. 한쪽을 수정하면 다른 쪽도 함께 수정하세요.
+//
+// 📌 2026-07-01 광주광역시 + 전라남도 → "전남광주통합특별시" 출범.
+//    region 값은 데이터·필터 호환을 위해 광주/전남을 분리한 17개 시/도 체계를 그대로 유지하고,
+//    "전남광주통합특별시 / 전남광주특별시 / 전남광주 …" 접두 주소는 뒤따르는 시/군/구로 판별한다
+//    (광산구·동구·서구·남구·북구 → 광주, 22개 시·군 → 전남, 판별 불가 → null).
+//    옛 표기("광주광역시 …", "전라남도 …")도 계속 인식된다.
 
 export const SIDO_LIST = [
   '서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종',
@@ -119,6 +127,11 @@ export function parseSido(text) {
   if (!s) return null
   if (SIDO_SET.has(s)) return s
 
+  // "전남광주통합특별시 …" 접두 → 뒤따르는 시/군/구로 광주/전남 판별 (일반 접두 규칙보다 먼저 —
+  // 그냥 두면 "전남" 접두로 오인됨)
+  const unifiedRest = stripUnifiedPrefix(s)
+  if (unifiedRest !== null) return resolveUnifiedSido(unifiedRest)
+
   for (const [prefix, sido] of PREFIX_ENTRIES) {
     if (s.startsWith(prefix)) return sido
   }
@@ -126,4 +139,154 @@ export function parseSido(text) {
     if (s.startsWith(city)) return sido
   }
   return null
+}
+
+// ═══ 2단계: 시/군/구 ═══════════════════════════════════════════════════════
+// 시/도별 기초자치단체 목록 (2026-07 행정구역 기준)
+//  - 강원특별자치도(2023-06), 전북특별자치도(2024-01): 시/도 명칭만 바뀌고 시/군 구성은 동일
+//  - 대구 군위군: 2023-07 경북 → 대구 편입 (경북 22개, 대구 9개)
+//  - 인천 2026-07-01 개편: 중구·동구 → 제물포구(내륙) + 영종구(영종도), 서구 → 서구 + 검단구 (9구 2군 = 11개)
+//    옛 "인천 동구"는 전부 제물포구에 포함되어 별칭으로 매핑, 옛 "인천 중구"는 제물포구/영종구로 갈려 매핑하지 않음
+//  - 세종특별자치시: 산하 시/군/구 없음 (빈 배열 → UI는 직접 입력만 제공)
+//  - 제주: 기초자치단체 없음 — 행정시(제주시·서귀포시) 2개를 실무상 상세지역으로 사용
+//  - 도(道)의 시 안에 있는 일반구(수원시 장안구, 화성시 동탄구 등)는 목록에 넣지 않음 — 상세지역은 기초자치단체 단위
+export const SIGUNGU_MAP = {
+  서울: ['종로구', '중구', '용산구', '성동구', '광진구', '동대문구', '중랑구', '성북구', '강북구', '도봉구',
+         '노원구', '은평구', '서대문구', '마포구', '양천구', '강서구', '구로구', '금천구', '영등포구', '동작구',
+         '관악구', '서초구', '강남구', '송파구', '강동구'],
+  부산: ['중구', '서구', '동구', '영도구', '부산진구', '동래구', '남구', '북구', '해운대구', '사하구',
+         '금정구', '강서구', '연제구', '수영구', '사상구', '기장군'],
+  대구: ['중구', '동구', '서구', '남구', '북구', '수성구', '달서구', '달성군', '군위군'],
+  인천: ['제물포구', '영종구', '미추홀구', '연수구', '남동구', '부평구', '계양구', '서구', '검단구', '강화군', '옹진군'],
+  광주: ['동구', '서구', '남구', '북구', '광산구'],
+  대전: ['동구', '중구', '서구', '유성구', '대덕구'],
+  울산: ['중구', '남구', '동구', '북구', '울주군'],
+  세종: [],
+  경기: ['수원시', '성남시', '고양시', '용인시', '부천시', '안산시', '안양시', '남양주시', '화성시', '평택시',
+         '의정부시', '시흥시', '파주시', '김포시', '광명시', '광주시', '군포시', '하남시', '오산시', '이천시',
+         '양주시', '구리시', '안성시', '포천시', '의왕시', '여주시', '동두천시', '과천시',
+         '양평군', '가평군', '연천군'],
+  강원: ['춘천시', '원주시', '강릉시', '동해시', '태백시', '속초시', '삼척시',
+         '홍천군', '횡성군', '영월군', '평창군', '정선군', '철원군', '화천군', '양구군', '인제군', '고성군', '양양군'],
+  충북: ['청주시', '충주시', '제천시', '보은군', '옥천군', '영동군', '증평군', '진천군', '괴산군', '음성군', '단양군'],
+  충남: ['천안시', '공주시', '보령시', '아산시', '서산시', '논산시', '계룡시', '당진시',
+         '금산군', '부여군', '서천군', '청양군', '홍성군', '예산군', '태안군'],
+  전북: ['전주시', '군산시', '익산시', '정읍시', '남원시', '김제시',
+         '완주군', '진안군', '무주군', '장수군', '임실군', '순창군', '고창군', '부안군'],
+  전남: ['목포시', '여수시', '순천시', '나주시', '광양시',
+         '담양군', '곡성군', '구례군', '고흥군', '보성군', '화순군', '장흥군', '강진군', '해남군', '영암군',
+         '무안군', '함평군', '영광군', '장성군', '완도군', '진도군', '신안군'],
+  경북: ['포항시', '경주시', '김천시', '안동시', '구미시', '영주시', '영천시', '상주시', '문경시', '경산시',
+         '의성군', '청송군', '영양군', '영덕군', '청도군', '고령군', '성주군', '칠곡군', '예천군', '봉화군',
+         '울진군', '울릉군'],
+  경남: ['창원시', '진주시', '통영시', '사천시', '김해시', '밀양시', '거제시', '양산시',
+         '의령군', '함안군', '창녕군', '고성군', '남해군', '하동군', '산청군', '함양군', '거창군', '합천군'],
+  제주: ['제주시', '서귀포시'],
+}
+
+// 대표 지명·신도시·옛 명칭 → 시/군/구 (parseSido 의 CITY_TO_SIDO 와 짝을 이룸)
+const LANDMARK_TO_SIGUNGU = {
+  여의도: ['서울', '영등포구'], 홍대: ['서울', '마포구'], 잠실: ['서울', '송파구'],
+  천호동: ['서울', '강동구'], 방이동: ['서울', '송파구'], 성수동: ['서울', '성동구'], 목동: ['서울', '양천구'],
+  송도: ['인천', '연수구'], 영종: ['인천', '영종구'], 검단: ['인천', '검단구'],
+  동구: ['인천', '제물포구'],   // 2026-07 개편 전 "인천 동구" (전역이 제물포구로 편입)
+  분당: ['경기', '성남시'], 판교: ['경기', '성남시'], 일산: ['경기', '고양시'], 동탄: ['경기', '화성시'], 광교: ['경기', '수원시'],
+}
+
+// 시/도별 매칭 패턴: 전체명("남양주시") + 2글자 이상 어간("남양주") + 대표 지명. 긴 패턴 우선.
+// 1글자 어간(중·동·서·남·북)은 오탐 위험이 커서 전체명("중구")으로만 매칭한다.
+// 시/도 별칭과 같은 어간("제주시"→"제주", "광주시"→"광주")은 원문 그대로 매칭하는 1차에서는 제외
+// ("제주도", "제주특별자치도 서귀포시" 가 제주시로 오인되는 것을 방지) — 시/도 표기를 떼어낸 뒤에는 허용
+// ("경기광주" → 광주시).
+const SIDO_ALIAS_SET = new Set(SIDO_PREFIXES.map(([p]) => p))
+const SIGUNGU_PATTERNS = Object.fromEntries(
+  Object.entries(SIGUNGU_MAP).map(([sido, names]) => {
+    const full = []
+    for (const name of names) {
+      full.push([name, name])
+      const stem = name.replace(/(시|군|구)$/, '')
+      if (stem.length >= 2) full.push([stem, name])
+    }
+    for (const [alias, [aSido, name]] of Object.entries(LANDMARK_TO_SIGUNGU)) {
+      if (aSido === sido) full.push([alias, name])
+    }
+    full.sort((a, b) => b[0].length - a[0].length)
+    const safe = full.filter(([pattern]) => !SIDO_ALIAS_SET.has(pattern))
+    return [sido, { full, safe }]
+  })
+)
+
+// 문자열 맨 앞의 시/도 표기 제거용 ("서울특별시 ", "경기도", "충청북도 " …)
+// parseSido 의 SIDO_PREFIXES 와 동일한 별칭 집합을 사용한다.
+const SIDO_ALIAS_RE = new RegExp('^(' + PREFIX_ENTRIES.map(([p]) => p).join('|') + ')')
+const SIDO_SUFFIX_RE = /^(특별자치시|특별자치도|광역시|특별시|도|시)/
+
+function matchSigungu(text, sido, patternSet = 'full') {
+  if (!text) return null
+  for (const [pattern, name] of SIGUNGU_PATTERNS[sido]?.[patternSet] ?? []) {
+    if (text.startsWith(pattern)) return name
+  }
+  return null
+}
+
+// ─── 전남광주통합특별시 (2026-07-01 출범) ────────────────────────────────
+// region 은 광주/전남 17개 체계를 유지하므로, 통합시 접두 뒤의 시/군/구로 소속 시/도를 판별한다.
+// 긴 표기가 먼저 오도록 나열 (정규식 대안은 앞에서부터 시도됨).
+const UNIFIED_CITY_RE = /^(전남광주통합특별시|전남광주특별시|전남광주)[\s,]*/
+const UNIFIED_CITY_MEMBERS = ['광주', '전남']
+
+/** 통합시 접두가 있으면 접두를 뗀 나머지(빈 문자열 가능), 없으면 null */
+function stripUnifiedPrefix(text) {
+  const rest = text.replace(UNIFIED_CITY_RE, '')
+  return rest === text ? null : rest
+}
+
+/** 접두를 뗀 나머지가 광주의 구/전남의 시·군으로 시작하면 해당 시/도, 아니면 null */
+function resolveUnifiedSido(rest) {
+  for (const sido of UNIFIED_CITY_MEMBERS) {
+    if (matchSigungu(rest, sido)) return sido
+  }
+  return null
+}
+
+/**
+ * 주소/지역 자유 텍스트 → 시/군/구 표준명 (SIGUNGU_MAP 값) 또는 null
+ *   parseSigungu("경기도 남양주시 다산동")   → "남양주시"
+ *   parseSigungu("서울시 강남구")            → "강남구"
+ *   parseSigungu("성남시 분당구")            → "성남시"   (기초자치단체 단위)
+ *   parseSigungu("강남구 테헤란로", "서울")  → "강남구"   (시/도를 알고 있으면 두 번째 인자로 전달)
+ *   parseSigungu("중구")                     → null       (시/도 없이는 모호)
+ *   parseSigungu("전남광주통합특별시 순천시") → "순천시"   (통합시 접두는 떼고 시/군/구만 본다)
+ * 매칭 순서: 원문 그대로 → 시/도 표기 제거 → 시/도 + 광역시/도/시 접미 제거
+ */
+export function parseSigungu(text, sido) {
+  if (text == null) return null
+  const raw = String(text).trim().replace(/\s+/g, ' ').toLowerCase()
+  if (!raw) return null
+  const targetSido = isSido(sido) ? sido : parseSido(raw)
+  if (!targetSido) return null
+
+  // 통합특별시 접두는 시/군/구 매칭에 방해만 되므로 먼저 제거
+  const s = stripUnifiedPrefix(raw) ?? raw
+  if (!s) return null
+
+  const hit = matchSigungu(s, targetSido, 'safe')
+  if (hit) return hit
+
+  const stripped = s.replace(SIDO_ALIAS_RE, '').replace(/^[\s,]+/, '')
+  if (stripped !== s) {
+    const hit2 = matchSigungu(stripped, targetSido)
+    if (hit2) return hit2
+    const stripped2 = stripped.replace(SIDO_SUFFIX_RE, '').replace(/^[\s,]+/, '')
+    if (stripped2 !== stripped) {
+      const hit3 = matchSigungu(stripped2, targetSido)
+      if (hit3) return hit3
+    }
+  }
+  return null
+}
+
+/** 목록·CSV 표시용: "경기 수원시" / "서울" / "-" */
+export function formatRegion(region, regionDetail, empty = '-') {
+  return [region, regionDetail].filter(Boolean).join(' ') || empty
 }

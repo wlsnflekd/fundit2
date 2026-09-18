@@ -3,7 +3,8 @@ import { useT, useIsMobile } from '../theme.jsx'
 import { Button, BottomSheet, TableSkeleton } from './Common.jsx'
 import CustomerDetailPanel, { STATUS_CONFIG, STATUS_GROUPS } from './customers/CustomerDetailPanel.jsx'
 import { supabase, getCustomers, deleteCustomer, createCustomer, createAssignmentNotification } from '../supabase.js'
-import { SIDO_LIST, parseSido } from '../utils/region.js'
+import { SIDO_LIST, SIGUNGU_MAP, parseSido, parseSigungu, formatRegion } from '../utils/region.js'
+import { SigunguField } from './customers/RegionFields.jsx'
 
 const STATUS_LIST = STATUS_GROUPS.flatMap(g => g.items)
 
@@ -60,6 +61,7 @@ function CustomerMobileCard({ c, onSelect, C, isDuplicate }) {
       <div style={{ display: 'flex', gap: 12, fontSize: 12, color: C.sub, marginBottom: 4 }}>
         <span>{c.ceo || '-'}</span>
         <span>{c.industry || '-'}</span>
+        {(c.region || c.region_detail) && <span>{formatRegion(c.region, c.region_detail)}</span>}
         <span style={{ marginLeft: 'auto' }}>담당: {c.consultantName || '미배분'}</span>
       </div>
       {/* 3행: 간단메모 */}
@@ -101,7 +103,7 @@ function CustomerRegisterPanel({ consultants, profile, onClose, onCreated, isMob
   const [form, setForm] = useState({
     company: '', ceo: '', industry: '', consultant: '', status: STATUS_LIST[0] ?? '신규',
     received_date: '', phone: '', business_type: '', lead_source: '',
-    address: '', region: '',
+    address: '', region: '', region_detail: '',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -128,6 +130,7 @@ function CustomerRegisterPanel({ consultants, profile, onClose, onCreated, isMob
       lead_source: form.lead_source || null,
       address: form.address.trim() || null,
       region: form.region || null,
+      region_detail: form.region_detail?.trim() || null,
       pool: false,
       tags: [],
       score: 0,
@@ -155,16 +158,34 @@ function CustomerRegisterPanel({ consultants, profile, onClose, onCreated, isMob
       <div><label style={labelStyle}>업종</label><input style={inputStyle} value={form.industry} onChange={e => set('industry', e.target.value)} placeholder="업종" /></div>
       <div><label style={labelStyle}>주소</label><input style={inputStyle} value={form.address} onChange={e => {
         const v = e.target.value
-        const sido = parseSido(v)
         set('address', v)
-        if (sido) set('region', sido)
+        const sido = parseSido(v)
+        if (sido) {
+          if (sido !== form.region) set('region_detail', '')
+          set('region', sido)
+          const d = parseSigungu(v, sido)
+          if (d) set('region_detail', d)
+        }
       }} placeholder="서울시 강남구 테헤란로 123" /></div>
       <div>
-        <label style={labelStyle}>지역</label>
-        <select style={inputStyle} value={form.region} onChange={e => set('region', e.target.value)}>
-          <option value="">선택 안함</option>
-          {SIDO_LIST.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ flex: 1 }}>
+            <label style={labelStyle}>지역</label>
+            <select style={inputStyle} value={form.region} onChange={e => { set('region', e.target.value); set('region_detail', '') }}>
+              <option value="">선택 안함</option>
+              {SIDO_LIST.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={labelStyle}>상세지역</label>
+            <SigunguField
+              sido={form.region}
+              value={form.region_detail}
+              onChange={v => set('region_detail', v ?? '')}
+              inputStyle={inputStyle}
+            />
+          </div>
+        </div>
         <div style={{ fontSize: 11, color: C.sub, marginTop: 4 }}>주소 입력 시 자동 선택됩니다</div>
       </div>
       <div>
@@ -275,6 +296,7 @@ export default function Customers({ consultantFilter, profile }) {
   const [leadSourceFilter, setLeadSourceFilter] = useState('')
   const [businessTypeFilter, setBusinessTypeFilter] = useState('')
   const [regionFilter, setRegionFilter] = useState('')
+  const [regionDetailFilter, setRegionDetailFilter] = useState('')
   const [adminConsultantFilter, setAdminConsultantFilter] = useState('')
   const [selected, setSelected] = useState(null)
   const panelRef = useRef(null)
@@ -300,6 +322,7 @@ export default function Customers({ consultantFilter, profile }) {
   const adminConsultantFilterRef = useRef(adminConsultantFilter)
   const businessTypeFilterRef = useRef(businessTypeFilter)
   const regionFilterRef = useRef(regionFilter)
+  const regionDetailFilterRef = useRef(regionDetailFilter)
   useEffect(() => { filterRef.current = filter }, [filter])
   useEffect(() => { searchRef.current = search }, [search])
   useEffect(() => { consultantFilterRef.current = consultantFilter }, [consultantFilter])
@@ -308,6 +331,7 @@ export default function Customers({ consultantFilter, profile }) {
   useEffect(() => { adminConsultantFilterRef.current = adminConsultantFilter }, [adminConsultantFilter])
   useEffect(() => { businessTypeFilterRef.current = businessTypeFilter }, [businessTypeFilter])
   useEffect(() => { regionFilterRef.current = regionFilter }, [regionFilter])
+  useEffect(() => { regionDetailFilterRef.current = regionDetailFilter }, [regionDetailFilter])
 
   // 담당자 인라인 편집
   const [editingConsultantId, setEditingConsultantId] = useState(null)
@@ -347,6 +371,7 @@ export default function Customers({ consultantFilter, profile }) {
           leadSource: leadSourceFilterRef.current,
           businessType: businessTypeFilterRef.current,
           region: regionFilterRef.current,
+          regionDetail: regionDetailFilterRef.current,
         }),
         supabase.from('profiles').select('id, name, role, created_at').eq('approval_status', 'approved'),
       ])
@@ -374,7 +399,7 @@ export default function Customers({ consultantFilter, profile }) {
     }
   }
 
-  useEffect(() => { loadData() }, [filter, search, consultantFilter, page, leadSourceFilter, adminConsultantFilter, businessTypeFilter, regionFilter])
+  useEffect(() => { loadData() }, [filter, search, consultantFilter, page, leadSourceFilter, adminConsultantFilter, businessTypeFilter, regionFilter, regionDetailFilter])
 
   // ── customers 테이블 Realtime 구독 ─────────────────────────────────────
   // 의존성을 profile 객체 전체가 아닌 workspaceId 문자열로 고정:
@@ -652,6 +677,7 @@ export default function Customers({ consultantFilter, profile }) {
         leadSource: leadSourceFilterRef.current,
         businessType: businessTypeFilterRef.current,
         region: regionFilterRef.current,
+        regionDetail: regionDetailFilterRef.current,
       })
       if (error || !data?.length) {
         alert('내보낼 고객사가 없습니다.')
@@ -659,9 +685,9 @@ export default function Customers({ consultantFilter, profile }) {
       }
       const memberMap = {}
       consultants.forEach(m => { memberMap[m.id] = m.name })
-      const allFiltered = data.map(c => ({ ...c, consultantName: memberMap[c.consultant] || '-' }))
+      const allFiltered = data.map(c => ({ ...c, consultantName: memberMap[c.consultant] || '-', regionLabel: formatRegion(c.region, c.region_detail, '') }))
       const headers = ['고객번호', '업체명', '대표자명', '연락처', '업종', '지역', '주소', '유입경로', '상태', '담당자', '접수일']
-      const fields = ['id', 'company', 'ceo', 'phone', 'industry', 'region', 'address', 'lead_source', 'status', 'consultantName', 'received_date']
+      const fields = ['id', 'company', 'ceo', 'phone', 'industry', 'regionLabel', 'address', 'lead_source', 'status', 'consultantName', 'received_date']
       const escape = (val) => {
         const s = val == null ? '' : String(val)
         return s.includes(',') || s.includes('\n') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s
@@ -749,7 +775,7 @@ export default function Customers({ consultantFilter, profile }) {
           {/* 지역 필터 */}
           <select
             value={regionFilter}
-            onChange={e => { setRegionFilter(e.target.value); setPage(1) }}
+            onChange={e => { setRegionFilter(e.target.value); setRegionDetailFilter(''); setPage(1) }}
             style={{
               padding: '4px 10px', borderRadius: 8, outline: 'none',
               background: regionFilter ? '#d4952a22' : C.s3,
@@ -763,6 +789,25 @@ export default function Customers({ consultantFilter, profile }) {
               <option key={s} value={s} style={{ background: C.s2, color: C.text }}>{s}</option>
             ))}
           </select>
+          {/* 상세지역 필터 */}
+          {regionFilter && (SIGUNGU_MAP[regionFilter]?.length > 0) && (
+            <select
+              value={regionDetailFilter}
+              onChange={e => { setRegionDetailFilter(e.target.value); setPage(1) }}
+              style={{
+                padding: '4px 10px', borderRadius: 8, outline: 'none',
+                background: regionDetailFilter ? '#d4952a22' : C.s3,
+                border: `1px solid ${regionDetailFilter ? '#d4952a' : C.line}`,
+                color: regionDetailFilter ? '#d4952a' : C.sub,
+                fontSize: 11, fontWeight: 700, cursor: 'pointer',
+              }}
+            >
+              <option value="">시/군/구 전체</option>
+              {SIGUNGU_MAP[regionFilter].map(s => (
+                <option key={s} value={s} style={{ background: C.s2, color: C.text }}>{s}</option>
+              ))}
+            </select>
+          )}
           {/* 담당자 필터 (admin 전용) */}
           {isAdmin && (
             <select
@@ -864,7 +909,7 @@ export default function Customers({ consultantFilter, profile }) {
             {/* 지역 필터 */}
             <select
               value={regionFilter}
-              onChange={e => { setRegionFilter(e.target.value); setPage(1) }}
+              onChange={e => { setRegionFilter(e.target.value); setRegionDetailFilter(''); setPage(1) }}
               style={{
                 padding: '6px 10px', borderRadius: 8, outline: 'none',
                 background: regionFilter ? '#d4952a22' : C.s3,
@@ -878,6 +923,25 @@ export default function Customers({ consultantFilter, profile }) {
                 <option key={s} value={s} style={{ background: C.s2, color: C.text }}>{s}</option>
               ))}
             </select>
+            {/* 상세지역 필터 */}
+            {regionFilter && (SIGUNGU_MAP[regionFilter]?.length > 0) && (
+              <select
+                value={regionDetailFilter}
+                onChange={e => { setRegionDetailFilter(e.target.value); setPage(1) }}
+                style={{
+                  padding: '6px 10px', borderRadius: 8, outline: 'none',
+                  background: regionDetailFilter ? '#d4952a22' : C.s3,
+                  border: `1px solid ${regionDetailFilter ? '#d4952a' : C.line}`,
+                  color: regionDetailFilter ? '#d4952a' : C.sub,
+                  fontSize: 12, fontWeight: 700, cursor: 'pointer', flex: 1,
+                }}
+              >
+                <option value="">시/군/구 전체</option>
+                {SIGUNGU_MAP[regionFilter].map(s => (
+                  <option key={s} value={s} style={{ background: C.s2, color: C.text }}>{s}</option>
+                ))}
+              </select>
+            )}
             {/* 담당자 필터 (admin 전용) */}
             {isAdmin && (
               <select
@@ -947,9 +1011,9 @@ export default function Customers({ consultantFilter, profile }) {
       ) : (
         <div style={{ background: C.s2, border: `1px solid ${C.line}`, borderRadius: 14, overflow: 'auto' }}>
           {loading ? (
-            <TableSkeleton rows={8} cols={isAdmin ? 12 : 11} />
+            <TableSkeleton rows={8} cols={isAdmin ? 13 : 12} />
           ) : (
-            <table style={{ width: '100%', minWidth: isAdmin ? 1000 : 960, borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+            <table style={{ width: '100%', minWidth: isAdmin ? 1110 : 1070, borderCollapse: 'collapse', tableLayout: 'fixed' }}>
               <colgroup>
                 <col style={{ width: 40 }} />
                 <col style={{ width: 100 }} />
@@ -958,6 +1022,7 @@ export default function Customers({ consultantFilter, profile }) {
                 <col style={{ width: 90 }} />
                 <col style={{ width: 110 }} />
                 <col style={{ width: 100 }} />
+                <col style={{ width: 110 }} />
                 <col style={{ width: 80 }} />
                 <col style={{ width: 180 }} />
                 <col style={{ width: 80 }} />
@@ -972,6 +1037,7 @@ export default function Customers({ consultantFilter, profile }) {
                   <th style={{ ...th, width: 90, minWidth: 90 }}>이름</th>
                   <th style={{ ...th, width: 110, minWidth: 110 }}>연락처</th>
                   <th style={{ ...th, width: 100, minWidth: 100 }}>업종</th>
+                  <th style={{ ...th, width: 110, minWidth: 110 }}>지역</th>
                   <th style={{ ...th, width: 80, minWidth: 80 }}>유입경로</th>
                   <th style={{ ...th, width: 180, minWidth: 180 }}>빠른 메모</th>
                   <th style={{ ...th, width: 80, minWidth: 80 }}>접수일</th>
@@ -1090,6 +1156,10 @@ export default function Customers({ consultantFilter, profile }) {
                     {/* 업종 */}
                     <td style={{ ...td, width: 100, minWidth: 100, maxWidth: 100, color: C.sub }}>
                       <span title={c.industry || undefined} style={ellipsis}>{c.industry || '-'}</span>
+                    </td>
+                    {/* 지역 */}
+                    <td style={{ ...td, width: 110, minWidth: 110, maxWidth: 110, color: C.sub }}>
+                      <span title={formatRegion(c.region, c.region_detail) !== '-' ? formatRegion(c.region, c.region_detail) : undefined} style={ellipsis}>{formatRegion(c.region, c.region_detail)}</span>
                     </td>
                     {/* 유입경로 */}
                     <td style={{ ...td, width: 80, minWidth: 80, maxWidth: 80, color: C.sub }}>

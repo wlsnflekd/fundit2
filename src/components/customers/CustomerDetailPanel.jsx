@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 're
 import { useT } from '../../theme.jsx'
 import { supabase, getCustomerSensitive } from '../../supabase.js'
 import { DetailSkeleton } from '../Common.jsx'
-import { SIDO_LIST, parseSido } from '../../utils/region.js'
+import { SIDO_LIST, parseSido, parseSigungu } from '../../utils/region.js'
+import { SigunguField } from './RegionFields.jsx'
 
 // ─── textarea auto-resize 헬퍼 ────────────────────────────────────────
 // height='auto' → reflow → 브라우저가 cursor를 viewport에 맞추려 부모 스크롤을 이동시키는 버그 방지
@@ -454,7 +455,12 @@ function TabBasic({ data, onChange, consultants, isAdmin, canViewAuth }) {
             const v = e.target.value || null
             onChange('address', v)
             const sido = parseSido(v)
-            if (sido) onChange('region', sido)
+            if (sido) {
+              if (sido !== data.region) onChange('region_detail', null)
+              onChange('region', sido)
+              const d = parseSigungu(v, sido)
+              if (d) onChange('region_detail', d)
+            }
           }}
           placeholder="시/군/구까지 입력하면 지역이 자동 선택됩니다"
         />
@@ -463,7 +469,16 @@ function TabBasic({ data, onChange, consultants, isAdmin, canViewAuth }) {
       <FieldWrapper label="지역">
         <RegionField
           value={data.region}
-          onChange={v => onChange('region', v)}
+          onChange={v => { onChange('region', v); if (v !== data.region) onChange('region_detail', null) }}
+        />
+      </FieldWrapper>
+
+      <FieldWrapper label="상세지역">
+        <SigunguField
+          sido={data.region}
+          value={data.region_detail}
+          onChange={v => onChange('region_detail', v)}
+          inputStyle={inputStyle}
         />
       </FieldWrapper>
 

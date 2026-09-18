@@ -143,11 +143,15 @@ created_at   timestamptz default now()
 ```
 (이후 `supabase/add_customer_detail_fields.sql` 등으로 상세 컬럼 다수 추가됨 — status, lead_source, phone, business_type, region, address …)
 
-**지역 계약 (`0004_customers_region_normalize.sql`)**
+**지역 계약 (`0004_customers_region_normalize.sql`, `0005_customers_region_detail.sql`)**
 - `region` = 17개 시/도 표준값(`src/utils/region.js`의 `SIDO_LIST`)만 저장 — 필터·`(workspace_id, region)` 인덱스 기준
+- `region_detail` = 시/군/구(`SIGUNGU_MAP[region]` 표준명 또는 직접 입력값, 세종은 목록 없음)
 - `address` = 자유 텍스트 주소/지역 원문
-- BEFORE INSERT/UPDATE 트리거 `trg_customers_normalize_region`이 어떤 유입 경로(앱, `submit_customer_form` RPC, Make, REST)든 `region`을 정규화하고 원문을 `address`에 보존
-- 파싱 규칙은 JS `parseSido()`와 SQL `public.parse_sido()`가 동일해야 함 — 한쪽 수정 시 반드시 다른 쪽도 수정
+- BEFORE INSERT/UPDATE 트리거 `trg_customers_normalize_region`이 어떤 유입 경로(앱, `submit_customer_form` RPC, Make, REST)든 `region`을 정규화하고 원문을 `address`에 보존하며, `region_detail`이 비어 있으면 `address`에서 파생(시/도가 바뀌면 이전 시/도의 표준 시/군/구는 자동 해제)
+- 파싱 규칙·목록은 JS `parseSido()`/`parseSigungu()`/`SIGUNGU_MAP`과 SQL `parse_sido()`/`parse_sigungu()`/`sigungu_map()`이 동일해야 함 — 한쪽 수정 시 반드시 다른 쪽도 수정
+- 행정구역 기준 2026-07: 대구 군위군 편입(2023-07), 인천 개편(2026-07-01: 제물포구·영종구·검단구 신설, 중구·동구 폐지), 제주는 기초자치단체 미시행(제주시·서귀포시 유지). `SIGUNGU_MAP`은 기초자치단체 단위 — 시 아래 일반구(수원시 장안구 등) 미포함
+- **전남광주통합특별시(2026-07-01 출범)**: `region` 값은 데이터·필터 호환을 위해 광주/전남을 분리한 17개 체계를 그대로 유지. "전남광주통합특별시/전남광주특별시/전남광주 …" 접두 주소는 뒤따르는 시/군/구로 판별(광산구·동구·서구·남구·북구 → 광주, 22개 시·군 → 전남, 판별 불가 → NULL). JS·SQL 양쪽 `parseSido`/`parseSigungu`에 동일 구현(0005에서 `parse_sido()` 재정의)
+- UI: 시/군/구 콤보박스는 `src/components/customers/RegionFields.jsx`의 `SigunguField` 공용 사용, 표시는 `formatRegion()` ("경기 수원시")
 
 #### `funds`
 ```
