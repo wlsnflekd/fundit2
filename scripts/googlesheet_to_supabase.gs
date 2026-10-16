@@ -117,7 +117,8 @@ function buildCustomerPayload(row) {
   // ── Boolean 필드 파싱 ────────────────────────────────────────
   // parseBoolean() 규칙: "있음"/"예"/"Y"/"true"/"1" → true, 그 외("없음" 포함) → false
   // ⚠️ 반전 로직 없음 — "있음" = true, "없음" = false 그대로 DB에 저장
-  var taxDelinquent   = parseBoolean(row[COL.국세체납여부]);
+  // 세금체납은 3단계(미확인/있음/없음) — 빈칸·판별 불가는 null(미확인)로 저장 (0007)
+  var taxDelinquent   = parseTriState(row[COL.국세체납여부]);
   // 아래 필드는 COL에서 해당 인덱스를 활성화(주석 해제)한 뒤 사용하세요
   var overdueHistory  = COL.연체이력    !== undefined ? parseBoolean(row[COL.연체이력])    : null;
   var rehabilitation  = COL.회생파산복구 !== undefined ? parseBoolean(row[COL.회생파산복구]) : null;
@@ -278,6 +279,15 @@ function parseNumericSafe(val) {
 }
 
 // "있음", "예", "Y", "true", "1" → true / 그 외("없음" 포함) → false
+// 3단계 파싱: 있음 → true, 없음 → false, 빈칸·그 외 → null(미확인)
+function parseTriState(val) {
+  if (val === null || val === undefined) return null;
+  var s = String(val).trim().toLowerCase();
+  if (s === '있음' || s === '예' || s === 'y' || s === 'yes' || s === 'true' || s === '1') return true;
+  if (s === '없음' || s === '아니오' || s === 'n' || s === 'no' || s === 'false' || s === '0') return false;
+  return null;
+}
+
 function parseBoolean(val) {
   if (val === null || val === undefined) return false;
   var s = String(val).trim().toLowerCase();

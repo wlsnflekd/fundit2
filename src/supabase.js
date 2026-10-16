@@ -356,17 +356,18 @@ export const getDashboardStats = async (profile = null) => {
 }
 
 // 민감 정보를 제외한 안전한 고객사 컬럼 목록
-// aippin_id/pw/2fa, sbiz_id/pw, resident_id_front 는 관리자 전용 (getCustomerSensitive 로 별도 조회)
+// - 신용·대출·사고 항목(kcb/nice_score, existing_loan, loan_*, rehabilitation(+memo),
+//   tax_delinquent(+amount))은 담당자·관리자 전용 → getCustomerCredit 으로 별도 조회
+// - aippin_*, sbiz_*, resident_id_front 는 미사용(0007에서 값 삭제) → 조회하지 않음
 const SAFE_CUSTOMER_COLS = [
   'id', 'workspace_id', 'company', 'ceo', 'industry', 'employees', 'revenue',
   'consultant', 'pool', 'tags', 'score', 'status', 'lead_source', 'phone',
   'business_type', 'business_reg_no', 'region', 'region_detail', 'address', 'business_age',
   'received_date', 'birth_date', 'business_reg_date',
   'contract_amount', 'commission_rate', 'consultation_memo', 'quick_memo',
-  'monthly_revenue', 'prev_year_revenue', 'prev2_year_revenue',
-  'existing_loan', 'required_funds', 'kcb_score', 'nice_score',
-  'tax_delinquent', 'overdue_history', 'rehabilitation', 'is_exporter',
-  'smart_device', 'closure_history', 'employee_count', 'policy_fund_usage',
+  'monthly_revenue', 'prev_year_revenue', 'required_funds',
+  'closure_history', 'closure_memo', 'employee_count',
+  'business_category', 'certifications', 'certification_etc', 'call_notes',
   'created_at',
 ].join(', ')
 
@@ -442,17 +443,25 @@ export const deleteCustomer = async (customerId) => {
   return { error }
 }
 
-// 인증정보 민감 컬럼 조회 (aippin, sbiz, 주민번호)
+// 신용·대출·사고 민감 항목 조회 (KCB/NICE, 기존대출, 사고이력, 세금체납)
 // DB 레벨 역할 체크: admin/superadmin은 워크스페이스 전체, staff는 본인 담당 고객만 허용
-// get_customer_sensitive RPC (supabase/add_customer_sensitive_read_rpc.sql) 참조
-// 호출부에서 canViewAuth 확인 후 호출해야 하며 (CustomerDetailPanel.jsx),
+// get_customer_credit RPC (supabase/migrations/0007_customer_call_log.sql) 참조
+// 호출부에서 canViewCredit 확인 후 호출해야 하며 (CustomerDetailPanel.jsx),
 // DB에서도 권한 위반 시 EXCEPTION을 발생시켜 이중으로 보호합니다.
-export const getCustomerSensitive = async (customerId) => {
+export const getCustomerCredit = async (customerId) => {
   const { data, error } = await supabase
-    .rpc('get_customer_sensitive', { p_customer_id: customerId })
+    .rpc('get_customer_credit', { p_customer_id: customerId })
   // RPC는 배열을 반환하므로 단일 행으로 변환
   const row = Array.isArray(data) ? data[0] ?? null : data
   return { data: row, error }
+}
+
+// 신용·대출·사고 민감 항목 수정 — patch 에 포함된 키만 수정, null 이면 값 삭제
+// 허용 키 외(existing_loan 등)는 DB에서 거부
+export const updateCustomerCredit = async (customerId, patch) => {
+  const { error } = await supabase
+    .rpc('update_customer_credit', { p_customer_id: customerId, p_patch: patch })
+  return { error }
 }
 
 // 고객사 신규 등록
