@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { useT } from '../../theme.jsx'
-import { supabase } from '../../supabase.js'
+import { supabase, getCustomerDocuments } from '../../supabase.js'
+import { isDocumentsComplete } from './documentTypes.js'
 import { DetailSkeleton } from '../Common.jsx'
 import { SIDO_LIST, parseSido, parseSigungu } from '../../utils/region.js'
 import { SigunguField } from './RegionFields.jsx'
@@ -32,7 +33,38 @@ function autoResizeTextarea(el) {
 }
 
 // 보유 인증 선택지 — DB CHECK(customers_certifications_allowed)와 동일하게 유지
-const CERTIFICATION_OPTIONS = ['특허', 'ISO', '벤처', '이노비즈', '메인비즈', '기업부설연구소', '기타']
+// '없음'은 다른 인증과 동시 선택 불가 (DB CHECK customers_certifications_none_exclusive, 0012)
+const CERTIFICATION_OPTIONS = ['특허', 'ISO', '벤처', '이노비즈', '메인비즈', '기업부설연구소', '기타', '없음']
+const CERT_NONE = '없음'
+
+// ─── 1차콜 작성 완료 판정 (탭 점등) ─────────────────────────────────────
+// 숫자: null/빈칸 = 미작성, 0 은 작성 / 텍스트: 공백뿐이면 미작성
+// 사고이력·세금체납·폐업이력: 미확인(null) = 미작성, '있음'이면 메모/금액까지 필요
+// 보유 인증: 미선택 = 미작성, '기타' 선택 시 기타 내용 필요 / 상담 특이사항은 제외
+const CALL_LOG_NUMBER_FIELDS = [
+  'employee_count', 'prev_year_revenue', 'kcb_score', 'nice_score',
+  'loan_policy_fund', 'loan_business', 'loan_personal', 'required_funds',
+]
+const CALL_LOG_TEXT_FIELDS = [
+  'ceo', 'company', 'business_category', 'industry', 'business_type', 'address', 'business_reg_date',
+]
+
+const isYesValue = v => v === true || v === 1 || v === 'true'
+const hasText = v => typeof v === 'string' ? v.trim() !== '' : v != null
+const hasNumber = v => v != null && String(v).trim() !== '' && !Number.isNaN(Number(v))
+
+function isCallLogComplete(d) {
+  if (!CALL_LOG_NUMBER_FIELDS.every(f => hasNumber(d[f]))) return false
+  if (!CALL_LOG_TEXT_FIELDS.every(f => hasText(d[f]))) return false
+  const triOk = (flag, detailOk) => flag != null && (!isYesValue(flag) || detailOk)
+  if (!triOk(d.rehabilitation, hasText(d.rehabilitation_memo))) return false
+  if (!triOk(d.tax_delinquent, hasNumber(d.tax_delinquent_amount))) return false
+  if (!triOk(d.closure_history, hasText(d.closure_memo))) return false
+  const certs = Array.isArray(d.certifications) ? d.certifications : []
+  if (certs.length === 0) return false
+  if (certs.includes('기타') && !hasText(d.certification_etc)) return false
+  return true
+}
 
 // ─── 상태 배지 색상 설정 ───────────────────────────────────────────────
 export const STATUS_CONFIG = {
@@ -631,11 +663,14 @@ function TabCallLog({ data, onChange, isMobile }) {
     }
   }, [data.call_notes])
 
-  const isYes = v => v === true || v === 1 || v === 'true'
+  const isYes = isYesValue
 
   const certs = Array.isArray(data.certifications) ? data.certifications : []
   const toggleCert = (opt) => {
-    const next = certs.includes(opt) ? certs.filter(c => c !== opt) : [...certs, opt]
+    // '없음' 선택 → 다른 인증 해제 / 다른 인증 선택 → '없음' 해제
+    const next = certs.includes(opt)
+      ? certs.filter(c => c !== opt)
+      : opt === CERT_NONE ? [CERT_NONE] : [...certs.filter(c => c !== CERT_NONE), opt]
     // 선택지 순서로 정렬해 저장, 비면 null
     const ordered = CERTIFICATION_OPTIONS.filter(o => next.includes(o))
     onChange('certifications', ordered.length ? ordered : null)
@@ -1006,11 +1041,38 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
 
   useImperativeHandle(ref, () => ({ flushSave }))
 
+  // 서류정보 점등용 서류 상태 — 고객 선택 시 1회 조회, 서류정보 탭에서 바꾸면 onDocsChange 로 즉시 반영
+  const [docsState, setDocsState] = useState({ customerId: null, docs: null, error: false })
+  const customerId = customer?.id
+  useEffect(() => {
+    if (!customerId) return
+    let cancelled = false
+    getCustomerDocuments(customerId).then(({ data, error }) => {
+      if (cancelled) return
+      const map = {}
+      ;(data ?? []).forEach(r => { map[r.doc_type] = { status: r.status } })
+      // 서류정보 탭이 먼저 로드해 전달했으면 그 값 유지. 조회 실패 → 빨강 + 안내 툴팁
+      setDocsState(prev => (prev.customerId === customerId && !prev.error
+        ? prev
+        : { customerId, docs: error ? null : map, error: !!error }))
+    })
+    return () => { cancelled = true }
+  }, [customerId])
+  const handleDocsChange = useCallback(docs => {
+    setDocsState({ customerId: editDataRef.current?.id ?? null, docs, error: false })
+  }, [])
+
   // 기존 사업정보·인증정보 탭은 화면에서 제거 (컬럼은 보존)
+  // done: 작성 상태 점등 (true 초록 / false 빨강 / undefined 표시 안 함). 입력 즉시 재계산
+  const hasData = Object.keys(editData).length > 0
   const TABS = [
     { id: 'basic', label: '기본정보' },
-    { id: 'call',  label: '1차콜' },
-    { id: 'docs',  label: '서류정보' },
+    { id: 'call',  label: '1차콜',   done: hasData ? isCallLogComplete(editData) : undefined },
+    { id: 'docs',  label: '서류정보',
+      done: hasData && docsState.customerId === editData.id
+        ? isDocumentsComplete(editData.business_type, docsState.docs)
+        : hasData && !editData.business_type ? false : undefined,
+      hint: docsState.customerId === editData.id && docsState.error ? '서류 조회 실패' : undefined },
   ]
 
   const panelWidth = isMobile ? '100vw' : panelWidthState
@@ -1080,7 +1142,19 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
               background: 'none', color: isActive ? C.gold : C.sub,
               fontSize: 12, fontWeight: isActive ? 700 : 400, cursor: 'pointer', transition: 'all 0.15s',
             }}>
-              {tab.label}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                {tab.label}
+                {tab.done !== undefined && (
+                  <span
+                    title={tab.hint ?? (tab.done ? '작성 완료' : '미작성 항목 있음')}
+                    style={{
+                      width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                      background: tab.done ? C.green : C.error,
+                      boxShadow: `0 0 0 2px ${tab.done ? C.green : C.error}33`,
+                    }}
+                  />
+                )}
+              </span>
             </button>
           )
         })}
@@ -1125,6 +1199,7 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
                 customerId={editData.id}
                 businessType={editData.business_type}
                 isMobile={isMobile}
+                onDocsChange={handleDocsChange}
               />
             )}
           </>

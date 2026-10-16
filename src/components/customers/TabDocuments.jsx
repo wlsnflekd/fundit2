@@ -1,24 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { useT } from '../../theme.jsx'
 import { getCustomerDocuments, upsertCustomerDocument } from '../../supabase.js'
+import { getDocTypes } from './documentTypes.js'
 
 // ─── 서류정보 탭 — 사업자형태별 서류 체크리스트 (customer_documents, 0010) ──────
 // - 행이 없는 서류는 '미요청'으로 표시, 처음 바꿀 때 (customer_id, doc_type) upsert 로 생성
 // - 상태 버튼: 클릭 즉시 저장 / 메모: 1초 debounce + blur 즉시 저장 / 언마운트(탭·고객 전환) 시 대기분 저장
 // - 개인↔법인 형태가 바뀌어도 기존 기록은 유지 (해당 형태의 목록만 표시)
 // - 파일 첨부는 후속 (customer_document_files 별도 테이블 예정)
-
-// 서류 목록 — DB CHECK(customer_documents_doc_type_check)는 두 목록의 합집합과 동일하게 유지
-const DOC_TYPES_BY_BUSINESS_TYPE = {
-  개인사업자: [
-    '사업자등록증', '부가세과세표준증명원', '재무제표', '소득금액증명원', '임대차계약서',
-    '4대보험가입자명부', '대출금융거래확인서', '회사소개서', '특허 및 인증',
-  ],
-  법인사업자: [
-    '사업자등록증', '부가세과세표준증명원', '재무제표', '법인등기부등본', '주주명부',
-    '4대보험가입자명부', '대출금융거래확인서', '회사소개서', '특허 및 인증',
-  ],
-}
 
 const NOTE_DEBOUNCE_MS = 1000
 const EMPTY_DOC = { status: '미요청', received_at: null, note: null }
@@ -68,7 +57,8 @@ function StatusButtons({ value, onChange }) {
   )
 }
 
-export default function TabDocuments({ customerId, businessType, isMobile }) {
+// onDocsChange(map): 로드·변경 시 부모(탭 작성 상태 점등)에 최신 서류 상태 전달
+export default function TabDocuments({ customerId, businessType, isMobile, onDocsChange }) {
   const C = useT()
   const [docs, setDocs] = useState({})          // doc_type → { status, received_at, note }
   const [loadState, setLoadState] = useState('loading') // loading | ready | error
@@ -84,8 +74,11 @@ export default function TabDocuments({ customerId, businessType, isMobile }) {
   const noteTimerRef = useRef(null)
   // 서류별 저장 직렬화 — 이전 요청이 끝난 뒤 그 시점의 최신 값을 보냄 (늦게 도착한 옛 요청이 덮어쓰는 것 방지)
   const saveChainRef = useRef(new Map())
+  // 콜백은 ref 로 보관 — 부모가 매 렌더 새 함수를 넘겨도 로드 effect 가 다시 돌지 않음
+  const onDocsChangeRef = useRef(onDocsChange)
+  useEffect(() => { onDocsChangeRef.current = onDocsChange }, [onDocsChange])
 
-  const docTypes = DOC_TYPES_BY_BUSINESS_TYPE[businessType] ?? null
+  const docTypes = getDocTypes(businessType)
 
   const inputStyle = {
     width: '100%', padding: '7px 10px', borderRadius: 8,
@@ -112,6 +105,7 @@ export default function TabDocuments({ customerId, businessType, isMobile }) {
       docsRef.current = map
       setDocs(map)
       setLoadState('ready')
+      onDocsChangeRef.current?.(map)
     })
     return () => { cancelled = true }
   }, [customerId])
@@ -147,6 +141,7 @@ export default function TabDocuments({ customerId, businessType, isMobile }) {
     const next = { ...(docsRef.current[docType] ?? EMPTY_DOC), ...patch }
     docsRef.current = { ...docsRef.current, [docType]: next }
     setDocs(docsRef.current)
+    onDocsChangeRef.current?.(docsRef.current)
     return next
   }
 
