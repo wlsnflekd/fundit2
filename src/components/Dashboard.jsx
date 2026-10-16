@@ -359,7 +359,7 @@ export default function Dashboard({ profile, onNavigate }) {
     const load = async () => {
       const { data, error } = await getDashboardStats(profile)
       if (error || !data) { setLoading(false); return }
-      setStats({ customers: data.customers, applications: data.applications, inProgress: data.inProgress })
+      setStats({ customers: data.customers, applications: data.applications, inProgress: data.inProgress, duplicateCustomers: data.duplicateCustomers ?? 0 })
       setUnassignedCount(data.unassignedCount ?? 0)
       setRecentCustomers(data.recentCustomers)
       const summary = Object.entries(data.statusCounts)
@@ -428,6 +428,10 @@ export default function Dashboard({ profile, onNavigate }) {
                 ? <span style={{ display: 'inline-block', height: 28, width: 56, borderRadius: 4, background: 'linear-gradient(90deg, var(--s3) 25%, var(--line) 50%, var(--s3) 75%)', backgroundSize: '400% 100%', animation: 'fundit-skeleton 1.4s ease infinite' }} />
                 : stats[key]}
             </div>
+            {/* 고객사 카드: 중복 재문의 카드는 별도 집계 (0013) */}
+            {key === 'customers' && !loading && (
+              <div style={{ fontSize: 11, color: C.sub }}>중복 재문의 {stats.duplicateCustomers ?? 0}</div>
+            )}
           </div>
         ))}
 

@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useT, useIsMobile } from '../theme.jsx'
 import { Button, BottomSheet, TableSkeleton } from './Common.jsx'
-import CustomerDetailPanel, { STATUS_CONFIG, STATUS_GROUPS } from './customers/CustomerDetailPanel.jsx'
-import { supabase, getCustomers, deleteCustomer, createCustomer, createAssignmentNotification } from '../supabase.js'
+import CustomerDetailPanel, { STATUS_CONFIG, STATUS_GROUPS, DuplicateBadge } from './customers/CustomerDetailPanel.jsx'
+import { supabase, getCustomers, deleteCustomer, createCustomer, createAssignmentNotification, findLatestCustomerByPhone } from '../supabase.js'
 import { SIDO_LIST, SIGUNGU_MAP, parseSido, parseSigungu, formatRegion } from '../utils/region.js'
 import { SigunguField } from './customers/RegionFields.jsx'
 
@@ -25,7 +25,7 @@ function StatusBadge({ status }) {
 }
 
 // ─── 모바일 카드 (테이블 대체) ────────────────────────────────────────
-function CustomerMobileCard({ c, onSelect, C, isDuplicate }) {
+function CustomerMobileCard({ c, onSelect, C }) {
   return (
     <div
       onClick={() => onSelect(c)}
@@ -42,14 +42,7 @@ function CustomerMobileCard({ c, onSelect, C, isDuplicate }) {
           fontSize: 15, fontWeight: 700, color: C.text,
           flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>{c.company}</span>
-        {isDuplicate && (
-          <span style={{
-            flexShrink: 0, fontSize: 10, fontWeight: 700,
-            padding: '1px 5px', borderRadius: 4,
-            background: '#f59e0b22', color: '#f59e0b',
-            border: '1px solid #f59e0b55', whiteSpace: 'nowrap',
-          }}>중복</span>
-        )}
+        {c.is_duplicate && <DuplicateBadge seq={c.duplicate_seq} />}
         {c.pool && (
           <span style={{
             fontSize: 10, fontWeight: 700, color: '#4d9eff',
@@ -139,9 +132,26 @@ function CustomerRegisterPanel({ consultants, profile, onClose, onCreated, isMob
       score: 0,
     }
 
+    // 같은 번호(숫자 기준) 고객이 있으면 확인 후 중복 카드로 등록 — 판정은 DB 트리거 (0013)
+    if (payload.phone) {
+      const { data: existing, error: findErr } = await findLatestCustomerByPhone(payload.phone)
+      if (findErr) { console.error('findLatestCustomerByPhone error:', findErr); setSaving(false); setError('번호 확인 중 오류가 발생했습니다.'); return }
+      if (existing) {
+        const name = consultants.find(m => m.id === existing.consultant)?.name ?? '미배정'
+        if (!window.confirm(`이미 등록된 번호입니다 (담당: ${name}). 중복으로 등록할까요?`)) {
+          setSaving(false)
+          return
+        }
+      }
+    }
+
     const { data, error: err } = await createCustomer(payload)
     setSaving(false)
-    if (err) { console.error('createCustomer error:', err); setError('저장 중 오류가 발생했습니다.'); return }
+    if (err) {
+      console.error('createCustomer error:', err)
+      setError(err.code === '23505' ? '이미 등록된 번호입니다' : '저장 중 오류가 발생했습니다.')
+      return
+    }
     onCreated(data)
     onClose()
   }
@@ -311,6 +321,7 @@ export default function Customers({ consultantFilter, profile }) {
   useEffect(() => () => clearTimeout(searchTimerRef.current), [])
   const [leadSourceFilter, setLeadSourceFilter] = useState('')
   const [businessTypeFilter, setBusinessTypeFilter] = useState('')
+  const [duplicateFilter, setDuplicateFilter] = useState('')   // '' | 'dup' — 중복(재문의) 카드만
   const [regionFilter, setRegionFilter] = useState('')
   const [regionDetailFilter, setRegionDetailFilter] = useState('')
   const [adminConsultantFilter, setAdminConsultantFilter] = useState('')
@@ -337,6 +348,7 @@ export default function Customers({ consultantFilter, profile }) {
   const leadSourceFilterRef = useRef(leadSourceFilter)
   const adminConsultantFilterRef = useRef(adminConsultantFilter)
   const businessTypeFilterRef = useRef(businessTypeFilter)
+  const duplicateFilterRef = useRef(duplicateFilter)
   const regionFilterRef = useRef(regionFilter)
   const regionDetailFilterRef = useRef(regionDetailFilter)
   useEffect(() => { filterRef.current = filter }, [filter])
@@ -346,6 +358,7 @@ export default function Customers({ consultantFilter, profile }) {
   useEffect(() => { leadSourceFilterRef.current = leadSourceFilter }, [leadSourceFilter])
   useEffect(() => { adminConsultantFilterRef.current = adminConsultantFilter }, [adminConsultantFilter])
   useEffect(() => { businessTypeFilterRef.current = businessTypeFilter }, [businessTypeFilter])
+  useEffect(() => { duplicateFilterRef.current = duplicateFilter }, [duplicateFilter])
   useEffect(() => { regionFilterRef.current = regionFilter }, [regionFilter])
   useEffect(() => { regionDetailFilterRef.current = regionDetailFilter }, [regionDetailFilter])
 
@@ -388,6 +401,7 @@ export default function Customers({ consultantFilter, profile }) {
           businessType: businessTypeFilterRef.current,
           region: regionFilterRef.current,
           regionDetail: regionDetailFilterRef.current,
+          duplicateOnly: duplicateFilterRef.current === 'dup',
         }),
         supabase.from('profiles').select('id, name, role, created_at').eq('approval_status', 'approved'),
       ])
@@ -415,7 +429,7 @@ export default function Customers({ consultantFilter, profile }) {
     }
   }
 
-  useEffect(() => { loadData() }, [filter, search, consultantFilter, page, leadSourceFilter, adminConsultantFilter, businessTypeFilter, regionFilter, regionDetailFilter])
+  useEffect(() => { loadData() }, [filter, search, consultantFilter, page, leadSourceFilter, adminConsultantFilter, businessTypeFilter, regionFilter, regionDetailFilter, duplicateFilter])
 
   // ── customers 테이블 Realtime 구독 ─────────────────────────────────────
   // 의존성을 profile 객체 전체가 아닌 workspaceId 문자열로 고정:
@@ -627,17 +641,6 @@ export default function Customers({ consultantFilter, profile }) {
     return ''
   }
 
-  // ── phone 중복 집합 계산 ────────────────────────────────────────────
-  // null·빈 문자열은 체크 제외. 현재 페이지의 customers 배열 안에서만 처리.
-  const duplicatePhones = (() => {
-    const counts = {}
-    customers.forEach(c => {
-      const p = c.phone?.trim()
-      if (p) counts[p] = (counts[p] || 0) + 1
-    })
-    return new Set(Object.keys(counts).filter(p => counts[p] >= 2))
-  })()
-
   const handleUpdate = (updated) => {
     const consultantName = consultants.find(m => m.id === updated.consultant)?.name || '-'
     const enriched = { ...updated, consultantName }
@@ -698,6 +701,7 @@ export default function Customers({ consultantFilter, profile }) {
         businessType: businessTypeFilterRef.current,
         region: regionFilterRef.current,
         regionDetail: regionDetailFilterRef.current,
+        duplicateOnly: duplicateFilterRef.current === 'dup',
       })
       if (error || !data?.length) {
         alert('내보낼 고객사가 없습니다.')
@@ -773,6 +777,21 @@ export default function Customers({ consultantFilter, profile }) {
             <option value="">사업자유형 전체</option>
             <option value="개인사업자" style={{ background: C.s2, color: C.text }}>개인사업자</option>
             <option value="법인사업자" style={{ background: C.s2, color: C.text }}>법인사업자</option>
+          </select>
+          {/* 중복(재문의) 고객 필터 */}
+          <select
+            value={duplicateFilter}
+            onChange={e => { setDuplicateFilter(e.target.value); setPage(1) }}
+            style={{
+              padding: '4px 10px', borderRadius: 8, outline: 'none',
+              background: duplicateFilter ? '#d4952a22' : C.s3,
+              border: `1px solid ${duplicateFilter ? '#d4952a' : C.line}`,
+              color: duplicateFilter ? '#d4952a' : C.sub,
+              fontSize: 11, fontWeight: 700, cursor: 'pointer',
+            }}
+          >
+            <option value="" style={{ background: C.s2, color: C.text }}>중복 포함 전체</option>
+            <option value="dup" style={{ background: C.s2, color: C.text }}>중복 고객만</option>
           </select>
           {/* 유입경로 필터 */}
           <select
@@ -908,6 +927,21 @@ export default function Customers({ consultantFilter, profile }) {
               <option value="개인사업자" style={{ background: C.s2, color: C.text }}>개인사업자</option>
               <option value="법인사업자" style={{ background: C.s2, color: C.text }}>법인사업자</option>
             </select>
+            {/* 중복(재문의) 고객 필터 */}
+            <select
+              value={duplicateFilter}
+              onChange={e => { setDuplicateFilter(e.target.value); setPage(1) }}
+              style={{
+                padding: '6px 10px', borderRadius: 8, outline: 'none',
+                background: duplicateFilter ? '#d4952a22' : C.s3,
+                border: `1px solid ${duplicateFilter ? '#d4952a' : C.line}`,
+                color: duplicateFilter ? '#d4952a' : C.sub,
+                fontSize: 12, fontWeight: 700, cursor: 'pointer', flex: 1,
+              }}
+            >
+              <option value="" style={{ background: C.s2, color: C.text }}>중복 포함 전체</option>
+              <option value="dup" style={{ background: C.s2, color: C.text }}>중복 고객만</option>
+            </select>
             {/* 유입경로 필터 */}
             <select
               value={leadSourceFilter}
@@ -1023,7 +1057,6 @@ export default function Customers({ consultantFilter, profile }) {
                 c={c}
                 onSelect={setSelected}
                 C={C}
-                isDuplicate={duplicatePhones.has(c.phone?.trim())}
               />
             ))
           )}
@@ -1154,14 +1187,7 @@ export default function Customers({ consultantFilter, profile }) {
                     <td style={{ ...td, width: 130, minWidth: 130, maxWidth: 130 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, overflow: 'hidden' }}>
                         <span title={c.company} style={{ fontWeight: 600, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', display: 'block', minWidth: 0, flex: 1 }}>{c.company}</span>
-                        {duplicatePhones.has(c.phone?.trim()) && (
-                          <span style={{
-                            flexShrink: 0, fontSize: 10, fontWeight: 700,
-                            padding: '1px 5px', borderRadius: 4,
-                            background: '#f59e0b22', color: '#f59e0b',
-                            border: '1px solid #f59e0b55', whiteSpace: 'nowrap',
-                          }}>중복</span>
-                        )}
+                        {c.is_duplicate && <DuplicateBadge seq={c.duplicate_seq} />}
                         {c.pool && <span style={{ flexShrink: 0, fontSize: 10, padding: '1px 6px', borderRadius: 999, background: C.blue, color: C.base }}>풀</span>}
                       </div>
                     </td>
@@ -1359,7 +1385,6 @@ export default function Customers({ consultantFilter, profile }) {
             consultants={consultants}
             onClose={() => setSelected(null)}
             onUpdate={handleUpdate}
-            isDuplicate={!!(selected?.phone?.trim() && duplicatePhones.has(selected.phone.trim()))}
           />
         </>
       )}

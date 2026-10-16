@@ -37,6 +37,22 @@ function autoResizeTextarea(el) {
 const CERTIFICATION_OPTIONS = ['특허', 'ISO', '벤처', '이노비즈', '메인비즈', '기업부설연구소', '기타', '없음']
 const CERT_NONE = '없음'
 
+// ─── 중복(재문의) 표시 배지 (0013) — 목록·카드·상세 헤더 공용 ─────────────
+// seq 1 → "중복", 2 이상 → "중복 N회"
+export function DuplicateBadge({ seq, size = 'sm' }) {
+  const C = useT()
+  return (
+    <span style={{
+      flexShrink: 0, fontSize: 10, fontWeight: 700,
+      padding: size === 'md' ? '2px 6px' : '1px 5px', borderRadius: 4,
+      background: `${C.gold}22`, color: C.gold,
+      border: `1px solid ${C.gold}55`, whiteSpace: 'nowrap',
+    }}>
+      {seq >= 2 ? `중복 ${seq}회` : '중복'}
+    </span>
+  )
+}
+
 // ─── 1차콜 작성 완료 판정 (탭 점등) ─────────────────────────────────────
 // 숫자: null/빈칸 = 미작성, 0 은 작성 / 텍스트: 공백뿐이면 미작성
 // 사고이력·세금체납·폐업이력: 미확인(null) = 미작성, '있음'이면 메모/금액까지 필요
@@ -860,7 +876,7 @@ function TabCallLog({ data, onChange, isMobile }) {
 // 300ms(타이핑 중 잦은 저장) → 1000ms 로 완화. 필드 이탈(blur) 시에는 즉시 저장.
 const AUTOSAVE_DELAY_MS = 1000
 
-const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, onClose, onUpdate, consultants = [], isDuplicate = false }, ref) {
+const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, onClose, onUpdate, consultants = [] }, ref) {
   const C = useT()
   const [editData, setEditData] = useState({})
   const [dirtyFields, setDirtyFields] = useState(new Set())
@@ -878,6 +894,9 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
   const saveFailCountRef = useRef(0)
   // 한글 IME 조합 중 여부 — 조합 중엔 debounce 저장 예약 안 함
   const isComposingRef = useRef(false)
+  // 번호 충돌(0013) 대비: 마지막으로 DB에 저장된 번호 / 충돌 안내 유지 여부
+  const lastSavedPhoneRef = useRef(null)
+  const phoneConflictRef = useRef(false)
 
   // dirty 필드만 DB에 기록 (상태 갱신 없음) — 반환: error 또는 null
   const writePatch = async (data, dirty) => {
@@ -894,6 +913,15 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
     const dirty = new Set(dirtyFieldsRef.current)
     if (dirty.size === 0 || !data?.id || saveFailCountRef.current >= 3) return
     writePatch(data, dirty).then(error => {
+      // 번호 충돌이면 번호만 빼고 나머지 변경분 재시도
+      if (error?.code === '23505' && dirty.has('phone')) {
+        const rest = new Set(dirty)
+        rest.delete('phone')
+        if (rest.size === 0) return
+        return writePatch(data, rest)
+      }
+      return error
+    }).then(error => {
       if (error) console.error('[CustomerDetailPanel] 대기 중 변경분 저장 실패:', error)
       // onUpdate 는 호출하지 않음 — 부모 handleUpdate 가 setSelected 를 하므로
       // 전환/닫기 직후 이전 고객 패널이 다시 열림. 목록 반영은 Realtime UPDATE 가 처리.
@@ -921,6 +949,8 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
       editDataRef.current = data
       dirtyFieldsRef.current = new Set()
       saveFailCountRef.current = 0
+      lastSavedPhoneRef.current = customer.phone ?? null
+      phoneConflictRef.current = false
       setEditData(data)
       setDirtyFields(new Set())
       setSaveError('')
@@ -932,6 +962,7 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
       const currentDirty = dirtyFieldsRef.current
       const merged = { ...customer }
       currentDirty.forEach(f => { merged[f] = editDataRef.current[f] })
+      if (!currentDirty.has('phone')) lastSavedPhoneRef.current = customer.phone ?? null
       editDataRef.current = merged
       setEditData(merged)
       // dirtyFields, saveError, savedOk, isSaving는 그대로 유지
@@ -997,6 +1028,28 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
 
     const saveError = await writePatch(data, dirty)
 
+    // 번호 수정이 다른 고객 번호와 충돌 (customers_original_phone_unique, 0013)
+    // → 번호만 저장 전 값으로 되돌리고, 나머지 변경분은 다음 저장에서 계속 저장
+    if (saveError?.code === '23505' && dirty.has('phone')) {
+      setIsSaving(false)
+      const nextDirty = new Set(dirtyFieldsRef.current)
+      // 저장 중 번호를 다시 고쳤으면 새 값은 dirty 로 남겨 재시도, 아니면 마지막 저장값으로 되돌림
+      if (editDataRef.current.phone === data.phone) {
+        nextDirty.delete('phone')
+        editDataRef.current = { ...editDataRef.current, phone: lastSavedPhoneRef.current }
+        setEditData(editDataRef.current)
+      }
+      dirtyFieldsRef.current = nextDirty
+      setDirtyFields(nextDirty)
+      phoneConflictRef.current = true   // 이어지는 다른 칸 저장 성공 시에도 안내 유지
+      setSaveError('이미 등록된 번호입니다')
+      if (nextDirty.size > 0) {
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+        saveTimerRef.current = setTimeout(() => doAutoSave(editDataRef.current, dirtyFieldsRef.current), AUTOSAVE_DELAY_MS)
+      }
+      return
+    }
+
     setIsSaving(false)
     if (saveError) {
       saveFailCountRef.current += 1
@@ -1006,7 +1059,8 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
       setSaveError(msg)
     } else {
       saveFailCountRef.current = 0
-      setSaveError('')
+      if (dirty.has('phone')) lastSavedPhoneRef.current = data.phone ?? null
+      if (!phoneConflictRef.current) setSaveError('')
       setSavedOk(true)
       // 저장 중 사용자가 수정한 필드는 dirty 유지 (비교: 저장 스냅샷 vs 현재 ref 값)
       const newDirty = new Set(dirtyFieldsRef.current)
@@ -1030,6 +1084,7 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
     setEditData(newData)
     setDirtyFields(newDirty)
     setSaveError('')
+    phoneConflictRef.current = false
     setSavedOk(false)
 
     // 한글 IME 조합 중에는 debounce 예약 안 함 — compositionEnd 후 자동 예약됨
@@ -1124,17 +1179,16 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
               <span style={{ fontSize: 16, fontWeight: 700, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
                 {editData.company || '-'}
               </span>
-              {isDuplicate && (
-                <span style={{
-                  flexShrink: 0, fontSize: 10, fontWeight: 700,
-                  padding: '2px 6px', borderRadius: 4,
-                  background: '#f59e0b22', color: '#f59e0b',
-                  border: '1px solid #f59e0b55', whiteSpace: 'nowrap',
-                }}>중복</span>
-              )}
+              {editData.is_duplicate && <DuplicateBadge seq={editData.duplicate_seq} size="md" />}
             </div>
             {editData.ceo && (
               <div style={{ fontSize: 13, color: C.sub, marginTop: 3 }}>{editData.ceo}</div>
+            )}
+            {/* 중복 카드: 재유입 시점 직전 카드의 담당자만 표시 (이전 기록 열람·링크 없음) */}
+            {editData.is_duplicate && (
+              <div style={{ fontSize: 12, color: C.sub, marginTop: 3 }}>
+                이전 담당: {consultants.find(m => m.id === editData.previous_consultant)?.name ?? '미배정'}
+              </div>
             )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>

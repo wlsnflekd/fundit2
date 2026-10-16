@@ -53,7 +53,7 @@ export default function Stats() {
     )
   }
 
-  const { totalCustomers, totalApps, approvedCount, approvalRate, totalAmount, monthlyData, statusCounts } = stats
+  const { totalCustomers, duplicateCustomers, totalApps, approvedCount, approvalRate, totalAmount, monthlyData, statusCounts } = stats
 
   const maxApps = Math.max(...monthlyData.map(d => d.applied), 1)
 
@@ -78,11 +78,13 @@ export default function Stats() {
           { label: '승인 완료', value: approvedCount + '건', color: C.green },
           { label: '승인율', value: approvalRate + '%', color: C.gold },
           { label: '총 지원금액', value: totalAmount >= 1 ? `${totalAmount.toFixed(1)}억` : `${(totalAmount * 10000).toLocaleString()}만`, color: C.blue },
-          { label: '관리 고객사', value: totalCustomers + '개사', color: C.text },
+          { label: '관리 고객사', value: totalCustomers + '개사', color: C.text,
+            sub: `중복 재문의 ${duplicateCustomers ?? 0}` },
         ].map(k => (
           <div key={k.label} style={{ background: C.s2, border: `1px solid ${C.line}`, borderRadius: 12, padding: '12px 20px', minWidth: isMobile ? 0 : 120, flex: isMobile ? undefined : 1 }}>
             <div style={{ fontSize: 12, color: C.sub, marginBottom: 4 }}>{k.label}</div>
             <div style={{ fontSize: 24, fontWeight: 700, color: k.color }}>{k.value}</div>
+            {k.sub && <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>{k.sub}</div>}
           </div>
         ))}
       </div>

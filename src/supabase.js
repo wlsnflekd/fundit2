@@ -286,14 +286,16 @@ export const getDashboardStats = async (profile = null) => {
     const userId = profile?.id
 
     // 역할에 따라 필터 조건 분기 — 쿼리 빌더는 let으로 선언 후 조건부 체이닝
-    let custCountQ  = supabase.from('customers').select('id', { count: 'exact', head: true })
+    // 고객사 수 = 최초 고객만, 중복 재문의 카드는 별도 집계 (0013)
+    let custCountQ  = supabase.from('customers').select('id', { count: 'exact', head: true }).eq('is_duplicate', false)
+    let dupCountQ   = supabase.from('customers').select('id', { count: 'exact', head: true }).eq('is_duplicate', true)
     let appCountQ   = supabase.from('applications').select('id', { count: 'exact', head: true })
     let inProgQ     = supabase.from('applications')
       .select('id', { count: 'exact', head: true })
       .neq('status', '승인완료')
       .neq('status', '반려')
     let recentQ     = supabase.from('customers')
-      .select('id, company, created_at, applications(status, deadline)')
+      .select('id, company, created_at, is_duplicate, duplicate_seq, applications(status, deadline)')
       .order('created_at', { ascending: false })
       .limit(5)
     let appStatusQ  = supabase.from('applications').select('status')
@@ -301,6 +303,7 @@ export const getDashboardStats = async (profile = null) => {
     if (isConsultant && userId) {
       // consultant: 본인 담당 고객사/신청건만
       custCountQ = custCountQ.eq('consultant', userId)
+      dupCountQ  = dupCountQ.eq('consultant', userId)
       appCountQ  = appCountQ.eq('consultant', userId)
       inProgQ    = inProgQ.eq('consultant', userId)
       recentQ    = recentQ.eq('consultant', userId)   // 최근 배정된 내 고객사
@@ -311,14 +314,14 @@ export const getDashboardStats = async (profile = null) => {
     }
 
     // admin 전용: 미배정 고객사 수 (consultant IS NULL)
-    const allQueries = [custCountQ, appCountQ, inProgQ, recentQ, appStatusQ]
+    const allQueries = [custCountQ, appCountQ, inProgQ, recentQ, appStatusQ, dupCountQ]
     if (!isConsultant) {
       allQueries.push(
         supabase.from('customers').select('id', { count: 'exact', head: true }).is('consultant', null)
       )
     }
 
-    const [custRes, appRes, inProgRes, recentRes, appStatusRes, unassignedRes] = await Promise.all(allQueries)
+    const [custRes, appRes, inProgRes, recentRes, appStatusRes, dupRes, unassignedRes] = await Promise.all(allQueries)
 
     const statusCounts = {}
     ;(appStatusRes.data ?? []).forEach(({ status }) => {
@@ -336,12 +339,15 @@ export const getDashboardStats = async (profile = null) => {
         const diff = Math.ceil((new Date(closest.deadline) - today) / 86400000)
         dday = diff >= 0 ? `D-${diff}` : `D+${Math.abs(diff)}`
       }
-      return { id: c.id, company: c.company, status, dday }
+      // 중복 재문의 카드는 업체명 옆에 표시 (0013)
+      const dupLabel = c.is_duplicate ? (c.duplicate_seq >= 2 ? ` (중복 ${c.duplicate_seq}회)` : ' (중복)') : ''
+      return { id: c.id, company: `${c.company}${dupLabel}`, status, dday }
     })
 
     return {
       data: {
         customers: custRes.count ?? 0,
+        duplicateCustomers: dupRes.count ?? 0,
         applications: appRes.count ?? 0,
         inProgress: inProgRes.count ?? 0,
         unassignedCount: unassignedRes?.count ?? 0,   // admin 전용
@@ -370,6 +376,7 @@ const SAFE_CUSTOMER_COLS = [
   'kcb_score', 'nice_score', 'existing_loan', 'loan_policy_fund', 'loan_business', 'loan_personal',
   'rehabilitation', 'rehabilitation_memo', 'tax_delinquent', 'tax_delinquent_amount',
   'business_category', 'certifications', 'certification_etc', 'call_notes',
+  'is_duplicate', 'original_customer_id', 'duplicate_seq', 'previous_consultant',
   'created_at',
 ].join(', ')
 
@@ -386,6 +393,7 @@ export const getCustomers = async ({
   businessType,  // '개인사업자' | '법인사업자' → 사업자유형 필터
   region,        // 시/도 17개 중 하나 → 지역 필터
   regionDetail,  // 시/군/구 → 상세지역 필터 (region 과 함께 사용)
+  duplicateOnly, // true → 중복(재문의) 카드만
 } = {}) => {
   let query = supabase
     .from('customers')
@@ -425,6 +433,10 @@ export const getCustomers = async ({
     query = query.eq('region_detail', regionDetail)
   }
 
+  if (duplicateOnly) {
+    query = query.eq('is_duplicate', true)
+  }
+
   // pageSize = 0 이면 range 미적용 (CSV 내보내기용 전건 조회)
   if (pageSize > 0) {
     const from = (page - 1) * pageSize
@@ -443,6 +455,19 @@ export const deleteCustomer = async (customerId) => {
     .delete()
     .eq('id', customerId)
   return { error }
+}
+
+// 같은 번호(숫자 기준)의 가장 최근 고객 — 직접 등록 시 중복 확인용 (phone_digits, 0013)
+export const findLatestCustomerByPhone = async (phone) => {
+  const digits = String(phone ?? '').replace(/[^0-9]/g, '')
+  if (!digits) return { data: null, error: null }
+  const { data, error } = await supabase
+    .from('customers')
+    .select('id, company, consultant')
+    .eq('phone_digits', digits)
+    .order('created_at', { ascending: false })
+    .limit(1)
+  return { data: data?.[0] ?? null, error }
 }
 
 // 고객 서류 체크리스트 조회 (customer_documents, 0010) — 행이 없는 서류는 화면에서 '미요청'
@@ -654,10 +679,11 @@ export const getStatsData = async () => {
     const today = new Date()
     const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString()
 
-    const [customersRes, appsRes, approvedRes] = await Promise.all([
-      supabase.from('customers').select('id', { count: 'exact', head: true }),
+    const [customersRes, appsRes, approvedRes, dupRes] = await Promise.all([
+      supabase.from('customers').select('id', { count: 'exact', head: true }).eq('is_duplicate', false),
       supabase.from('applications').select('id, status, amount, created_at'),
       supabase.from('applications').select('id, amount').eq('status', '승인완료'),
+      supabase.from('customers').select('id', { count: 'exact', head: true }).eq('is_duplicate', true),
     ])
 
     const apps = appsRes.data ?? []
@@ -686,7 +712,8 @@ export const getStatsData = async () => {
 
     return {
       data: {
-        totalCustomers: customersRes.count ?? 0,
+        totalCustomers: customersRes.count ?? 0,         // 최초 고객만 (0013)
+        duplicateCustomers: dupRes.count ?? 0,            // 중복 재문의 카드
         totalApps: apps.length,
         approvedCount: approved.length,
         approvalRate: apps.length ? Math.round((approved.length / apps.length) * 100) : 0,
