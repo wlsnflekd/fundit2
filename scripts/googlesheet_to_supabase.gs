@@ -2,12 +2,11 @@
 // FUNDIT — 구글시트 → Supabase 연동 [통합 완성본]
 // 최종 수정: 2026-10-16 (국세체납 3단계: 있음/없음/빈칸=미확인)
 //
-// [이번 수정 핵심]
-// submit_customer_form RPC는 중복 고객이어도 HTTP 200을 반환한다.
-//   - 신규 등록 성공 → body = "uuid"
-//   - 중복(스킵)      → body = null
-// 기존 코드는 code === 200 만 보고 성공 처리 → 중복이 "전송완료"로 위장됨.
-// 이제 BODY 로 판별하여 성공 / 중복 / 실패 3가지로 구분한다.
+// [응답 판별 — 0013 이후]
+// submit_customer_form RPC는 JSON을 반환한다.
+//   - {"status":"created"}          → 신규 등록 (시트 ✅)
+//   - {"status":"duplicate"}        → 재문의, 펀딧에 중복 카드 새로 생성 (시트 🔁)
+//   - {"status":"recent_duplicate"} → 10분 내 재유입, 카드 미생성 (시트 🔁)
 //
 // [2026-10-16]
 // 국세체납여부: parseBoolean → parseTriState
@@ -81,24 +80,24 @@ function callSubmitRpc(rpcPayload) {
     return { status: 'error', message: 'HTTP ' + code + ' — ' + body };
   }
 
-  // 200이지만 body가 null → RPC가 중복으로 판단하고 스킵
-  var trimmed = String(body).trim();
-  if (trimmed === '' || trimmed === 'null') {
-    return { status: 'duplicate', message: 'CRM에 이미 등록된 번호' };
-  }
-
-  var id;
+  // 200: body = {"id": "...", "status": "created"|"duplicate"|"recent_duplicate", "duplicate_count": n}
+  var res;
   try {
-    id = JSON.parse(trimmed);
+    res = JSON.parse(String(body).trim());
   } catch (e) {
-    return { status: 'error', message: '응답 파싱 실패: ' + trimmed };
+    return { status: 'error', message: '응답 파싱 실패: ' + body };
   }
 
-  if (!id) {
-    return { status: 'duplicate', message: 'CRM에 이미 등록된 번호' };
+  if (res && res.status === 'created') {
+    return { status: 'success', id: res.id };
   }
-
-  return { status: 'success', id: id };
+  if (res && res.status === 'duplicate') {
+    return { status: 'duplicate', id: res.id, message: '재문의 ' + res.duplicate_count + '회차 (새 카드 생성)' };
+  }
+  if (res && res.status === 'recent_duplicate') {
+    return { status: 'duplicate', id: res.id, message: '10분 내 재유입 (카드 미생성)' };
+  }
+  return { status: 'error', message: '알 수 없는 응답: ' + body };
 }
 
 
