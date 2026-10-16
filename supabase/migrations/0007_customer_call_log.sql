@@ -4,14 +4,14 @@
 -- ============================================================================
 --
 -- 섹션
---   A. 미사용 민감정보(주민번호·아이핀·소진공) 값 삭제 — 컬럼은 유지
+--   A. 미사용 민감정보(아이핀·소진공) 값 삭제 — 컬럼은 유지. 주민번호 앞자리는 데이터 보존
 --   B. 1차 콜일지 신규 컬럼
 --   C. 세금체납 3단계 전환 — DEFAULT false 제거 + 기존 false(미확인 추정) → NULL (백업 후)
 --   D. submit_customer_form: 체납 미입력을 false 가 아닌 NULL(미확인)로 저장
 --   E. 신용·대출·사고 민감 항목 RPC: get_customer_credit / update_customer_credit
 --
 -- 실행: Supabase SQL Editor 에서 파일 전체를 한 번에 실행 (단일 트랜잭션)
---       약 3.7천 행 UPDATE → Realtime 이벤트가 몰리므로 사용량 적은 시간대 권장
+--       약 2.8천 행 UPDATE → Realtime 이벤트가 몰리므로 사용량 적은 시간대 권장
 -- 순서: 이 SQL 적용 → 프론트 배포 (프론트가 신규 컬럼/RPC 를 조회하므로)
 -- 롤백: 파일 하단 ROLLBACK 섹션 참고 (섹션 A 삭제값은 복구 불가 — 의도된 영구 삭제)
 -- ============================================================================
@@ -23,20 +23,19 @@ SET LOCAL lock_timeout = '5s';
 
 
 -- ── A. 미사용 민감정보 값 삭제 ───────────────────────────────────────────────
--- 사용하지 않는 정보(주민번호 856명, 아이핀 ID/PW 35명, 아이핀 2차 12명, 소진공 ID/PW 5명,
--- 합계 887명). 컬럼은 유지하고 값만 NULL 로 영구 삭제한다. 백업하지 않음(보관 자체가 위험).
+-- 사용하지 않는 정보(아이핀 ID/PW 35명, 아이핀 2차 12명, 소진공 ID/PW 5명, 합계 37명).
+-- 컬럼은 유지하고 값만 NULL 로 영구 삭제한다. 백업하지 않음(보관 자체가 위험).
+-- resident_id_front(주민번호 앞자리 856명)는 삭제하지 않고 보존 — 화면에서만 제거.
 UPDATE public.customers
-SET resident_id_front = NULL,
-    aippin_id         = NULL,
-    aippin_pw         = NULL,
-    aippin_2fa        = NULL,
-    sbiz_id           = NULL,
-    sbiz_pw           = NULL
-WHERE resident_id_front IS NOT NULL
-   OR aippin_id  IS NOT NULL OR aippin_pw IS NOT NULL OR aippin_2fa IS NOT NULL
-   OR sbiz_id    IS NOT NULL OR sbiz_pw   IS NOT NULL;
+SET aippin_id  = NULL,
+    aippin_pw  = NULL,
+    aippin_2fa = NULL,
+    sbiz_id    = NULL,
+    sbiz_pw    = NULL
+WHERE aippin_id IS NOT NULL OR aippin_pw IS NOT NULL OR aippin_2fa IS NOT NULL
+   OR sbiz_id   IS NOT NULL OR sbiz_pw   IS NOT NULL;
 
-COMMENT ON COLUMN public.customers.resident_id_front IS '미사용(0007에서 값 삭제). 신규 저장 금지';
+COMMENT ON COLUMN public.customers.resident_id_front IS '화면 미표시(0007), 데이터 보존. customer_private 분리 시 이전·보호 대상';
 COMMENT ON COLUMN public.customers.aippin_id         IS '미사용(0007에서 값 삭제). 신규 저장 금지';
 COMMENT ON COLUMN public.customers.aippin_pw         IS '미사용(0007에서 값 삭제). 신규 저장 금지';
 COMMENT ON COLUMN public.customers.aippin_2fa        IS '미사용(0007에서 값 삭제). 신규 저장 금지';
@@ -294,7 +293,8 @@ COMMIT;
 -- ============================================================================
 -- 검증 (실행 후 별도 실행) — 기대값을 주석으로 표기
 -- ============================================================================
--- select count(*) filter (where coalesce(resident_id_front,aippin_id,aippin_pw,aippin_2fa,sbiz_id,sbiz_pw) is not null) as sensitive_left,  -- 0
+-- select count(*) filter (where coalesce(aippin_id,aippin_pw,aippin_2fa,sbiz_id,sbiz_pw) is not null) as unused_left,  -- 0
+--        count(resident_id_front)                       as resident_kept, -- 856 (보존)
 --        count(*) filter (where tax_delinquent = false) as tax_false,     -- 0
 --        count(*) filter (where tax_delinquent)         as tax_true,      -- 115 (변동 없음)
 --        count(*) filter (where tax_delinquent is null) as tax_unknown    -- 2,806 (+ 기존 NULL)
@@ -307,6 +307,8 @@ COMMIT;
 -- ============================================================================
 -- 후속 정리 (새 프론트 프로덕션 배포 확인 후 실행) — 미사용 RPC 제거
 -- ============================================================================
+-- resident_id_front 는 보존되지만 화면에서 쓰지 않으므로 RPC 경로도 불필요.
+-- customer_private 분리 작업 때 해당 테이블로 이전하고 RLS 로 보호한다.
 -- DROP FUNCTION IF EXISTS public.get_customer_sensitive(uuid);
 -- DROP FUNCTION IF EXISTS public.update_customer_sensitive(uuid, text, text, text, text, text, text);
 

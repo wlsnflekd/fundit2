@@ -358,7 +358,8 @@ export const getDashboardStats = async (profile = null) => {
 // 민감 정보를 제외한 안전한 고객사 컬럼 목록
 // - 신용·대출·사고 항목(kcb/nice_score, existing_loan, loan_*, rehabilitation(+memo),
 //   tax_delinquent(+amount))은 담당자·관리자 전용 → getCustomerCredit 으로 별도 조회
-// - aippin_*, sbiz_*, resident_id_front 는 미사용(0007에서 값 삭제) → 조회하지 않음
+// - aippin_*, sbiz_* 는 미사용(0007에서 값 삭제), resident_id_front 는 화면 미표시(데이터 보존,
+//   customer_private 분리 시 이전 예정) → 조회하지 않음
 const SAFE_CUSTOMER_COLS = [
   'id', 'workspace_id', 'company', 'ceo', 'industry', 'employees', 'revenue',
   'consultant', 'pool', 'tags', 'score', 'status', 'lead_source', 'phone',
