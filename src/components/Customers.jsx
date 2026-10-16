@@ -98,6 +98,9 @@ function formatPhone(value) {
 
 const LEAD_SOURCE_OPTIONS = ['당근', '메타', '인스타', '점포라인', '렌탈', '소개', '기타']
 
+// 검색 debounce — 입력이 멈춘 뒤에만 서버 검색 실행
+const SEARCH_DEBOUNCE_MS = 350
+
 function CustomerRegisterPanel({ consultants, profile, onClose, onCreated, isMobile }) {
   const C = useT()
   const [form, setForm] = useState({
@@ -293,6 +296,19 @@ export default function Customers({ consultantFilter, profile }) {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('')
   const [search, setSearch] = useState('')
+  // 입력창 표시값 — 쿼리는 debounce 후 search에 반영될 때만 실행
+  // (키 입력·한글 조합 단계마다 9컬럼 ilike + count 쿼리가 나가던 문제 방지)
+  const [searchInput, setSearchInput] = useState('')
+  const searchTimerRef = useRef(null)
+  const handleSearchInput = (value) => {
+    setSearchInput(value)
+    clearTimeout(searchTimerRef.current)
+    searchTimerRef.current = setTimeout(() => {
+      setSearch(value)
+      setPage(1)
+    }, SEARCH_DEBOUNCE_MS)
+  }
+  useEffect(() => () => clearTimeout(searchTimerRef.current), [])
   const [leadSourceFilter, setLeadSourceFilter] = useState('')
   const [businessTypeFilter, setBusinessTypeFilter] = useState('')
   const [regionFilter, setRegionFilter] = useState('')
@@ -422,14 +438,18 @@ export default function Customers({ consultantFilter, profile }) {
 
       ch = supabase
         .channel(`customers:${workspaceId}`)
+      // filter: 서버(Realtime)에서 워크스페이스 단위로 걸러 타 워크스페이스 변경의 RLS 평가·전송을 생략
+      // payload의 workspace_id 비교는 이중 방어로 유지
       .on('postgres_changes', {
           event: 'INSERT', schema: 'public', table: 'customers',
+          filter: `workspace_id=eq.${workspaceId}`,
         }, (payload) => {
           if (payload.new.workspace_id !== workspaceId) return
           loadData()
         })
         .on('postgres_changes', {
           event: 'UPDATE', schema: 'public', table: 'customers',
+          filter: `workspace_id=eq.${workspaceId}`,
         }, (payload) => {
           if (payload.new.workspace_id !== workspaceId) return
           const updated = payload.new
@@ -838,7 +858,7 @@ export default function Customers({ consultantFilter, profile }) {
             />
             <span style={{ fontSize: 11, color: C.sub, whiteSpace: 'nowrap' }}>상태 색상</span>
           </label>
-          <input value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} placeholder="업체명·이름·연락처·업종·지역·유입채널·상담내용 검색"
+          <input value={searchInput} onChange={e => handleSearchInput(e.target.value)} placeholder="업체명·이름·연락처·업종·지역·유입채널·상담내용 검색"
             style={{ padding: '4px 12px', borderRadius: 8, border: `1px solid ${C.line}`, background: C.s3, color: C.text, fontSize: 12, width: 180, outline: 'none' }} />
         </div>
       )}
@@ -846,8 +866,8 @@ export default function Customers({ consultantFilter, profile }) {
       {isMobile && (
         <>
           <input
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1) }}
+            value={searchInput}
+            onChange={e => handleSearchInput(e.target.value)}
             placeholder="업체명·이름·연락처·업종·지역·유입채널·상담내용 검색"
             style={{
               display: 'block', width: '100%', boxSizing: 'border-box',

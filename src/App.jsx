@@ -357,8 +357,9 @@ function NotificationBell({ profile, notifRefreshSignal = 0 }) {
       loadNotifications()
     }, 2000)
 
-    // 이후 60초마다 폴링 (기존 30초 → 60초로 완화)
-    const interval = setInterval(loadNotifications, 60000)
+    // 이후 5분마다 폴링 — 새 알림은 Realtime(notifRefreshSignal)으로 즉시 반영되므로
+    // 폴링은 Realtime 끊김 대비 안전망 용도 (기존 60초 → 5분으로 완화)
+    const interval = setInterval(loadNotifications, 5 * 60 * 1000)
 
     return () => {
       clearTimeout(initialDelay)
@@ -749,6 +750,8 @@ function MainApp({ profile, onLogout, rootTab, setRootTab }) {
         .channel(`notifications:${userId}`)
         .on('postgres_changes', {
           event: 'INSERT', schema: 'public', table: 'notifications',
+          // 서버 측에서 본인 알림만 수신 — 타 사용자 INSERT의 RLS 평가·전송 생략 (아래 비교는 이중 방어)
+          filter: `user_id=eq.${userId}`,
         }, (payload) => {
           if (payload.new.user_id !== userId) return
           if (!payload.new.is_read) {

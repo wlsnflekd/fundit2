@@ -963,6 +963,10 @@ function TabAuth({ data, onChange, isAdmin, canViewAuth, loadError }) {
 
 // ─── 고객사 상세 패널 ────────────────────────────────────────────────
 
+// 자동저장 debounce — 매 저장이 customers UPDATE + Realtime 브로드캐스트를 유발하므로
+// 300ms(타이핑 중 잦은 저장) → 1000ms 로 완화. 필드 이탈(blur) 시에는 즉시 저장.
+const AUTOSAVE_DELAY_MS = 1000
+
 const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, profile, onClose, onUpdate, consultants = [], isDuplicate = false }, ref) {
   const C = useT()
   const [editData, setEditData] = useState({})
@@ -984,6 +988,53 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
   // 한글 IME 조합 중 여부 — 조합 중엔 debounce 저장 예약 안 함
   const isComposingRef = useRef(false)
 
+  // dirty 필드만 DB에 기록 (상태 갱신 없음) — 반환: error 또는 null
+  const writePatch = async (data, dirty) => {
+    const regularPatch = {}
+    const sensitivePatch = {}
+    dirty.forEach(f => {
+      if (SENSITIVE_FIELDS.has(f)) sensitivePatch[f] = data[f]
+      else regularPatch[f] = data[f]
+    })
+
+    let saveError = null
+
+    // 일반 필드: 기존 직접 UPDATE 경로
+    if (Object.keys(regularPatch).length > 0) {
+      const { error } = await supabase.from('customers').update(regularPatch).eq('id', data.id)
+      if (error) saveError = error
+    }
+
+    // 민감 필드: RPC 경로 (DB 레벨 역할 체크 포함)
+    if (Object.keys(sensitivePatch).length > 0 && !saveError) {
+      const { error } = await supabase.rpc('update_customer_sensitive', {
+        p_customer_id: data.id,
+        p_aippin_id:   sensitivePatch.aippin_id   ?? null,
+        p_aippin_pw:   sensitivePatch.aippin_pw   ?? null,
+        p_aippin_2fa:  sensitivePatch.aippin_2fa  ?? null,
+        p_sbiz_id:     sensitivePatch.sbiz_id     ?? null,
+        p_sbiz_pw:     sensitivePatch.sbiz_pw     ?? null,
+        p_resident_id: sensitivePatch.resident_id_front ?? null,
+      })
+      if (error) saveError = error
+    }
+
+    return saveError
+  }
+
+  // 고객 전환/언마운트 직전: 대기 중인 변경분을 스냅샷으로 기록 (fire-and-forget)
+  // 패널 상태는 곧 리셋/소멸되므로 상태 갱신 없이 쓰기만 수행
+  const persistPending = () => {
+    const data = editDataRef.current
+    const dirty = new Set(dirtyFieldsRef.current)
+    if (dirty.size === 0 || !data?.id || saveFailCountRef.current >= 3) return
+    writePatch(data, dirty).then(error => {
+      if (error) console.error('[CustomerDetailPanel] 대기 중 변경분 저장 실패:', error)
+      // onUpdate 는 호출하지 않음 — 부모 handleUpdate 가 setSelected 를 하므로
+      // 전환/닫기 직후 이전 고객 패널이 다시 열림. 목록 반영은 Realtime UPDATE 가 처리.
+    })
+  }
+
   // 모바일 감지
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 768)
@@ -998,8 +1049,9 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
     if (!customer) return
     const isNewCustomer = customer.id !== editDataRef.current?.id
     if (isNewCustomer) {
-      // 다른 고객 선택 — 전체 리셋
+      // 다른 고객 선택 — 대기 중인 이전 고객 저장은 버리지 않고 즉시 기록한 뒤 전체 리셋
       if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null }
+      persistPending()
       const data = { ...customer }
       editDataRef.current = data
       dirtyFieldsRef.current = new Set()
@@ -1021,7 +1073,7 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
       setEditData(merged)
       // dirtyFields, saveError, savedOk, isSaving, sensitiveLoaded는 그대로 유지
     }
-  }, [customer])
+  }, [customer]) // eslint-disable-line react-hooks/exhaustive-deps -- persistPending 은 ref 만 읽으므로 의존성 불필요
 
   // 다른 고객 선택 시에만 탭을 기본정보로 초기화
   // [customer] 의존성이면 자동저장 후 객체 교체 때도 trigger되므로 id만 감시
@@ -1029,10 +1081,13 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
     if (customer?.id) setActiveTab('basic')
   }, [customer?.id])
 
-  // 언마운트 시 타이머 정리
+  // 언마운트 시 타이머 정리 + 대기 중이던 변경분 기록 (debounce 창 안의 입력 유실 방지)
   useEffect(() => {
-    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
-  }, [])
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      persistPending()
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'superadmin'
   // 본인이 담당 컨설턴트인지 — consultant 컬럼은 profiles.id(uuid) 참조
@@ -1105,34 +1160,7 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
     setIsSaving(true)
     setSavedOk(false)
 
-    const regularPatch = {}
-    const sensitivePatch = {}
-    dirty.forEach(f => {
-      if (SENSITIVE_FIELDS.has(f)) sensitivePatch[f] = data[f]
-      else regularPatch[f] = data[f]
-    })
-
-    let saveError = null
-
-    // 일반 필드: 기존 직접 UPDATE 경로
-    if (Object.keys(regularPatch).length > 0) {
-      const { error } = await supabase.from('customers').update(regularPatch).eq('id', data.id)
-      if (error) saveError = error
-    }
-
-    // 민감 필드: RPC 경로 (DB 레벨 역할 체크 포함)
-    if (Object.keys(sensitivePatch).length > 0 && !saveError) {
-      const { error } = await supabase.rpc('update_customer_sensitive', {
-        p_customer_id: data.id,
-        p_aippin_id:   sensitivePatch.aippin_id   ?? null,
-        p_aippin_pw:   sensitivePatch.aippin_pw   ?? null,
-        p_aippin_2fa:  sensitivePatch.aippin_2fa  ?? null,
-        p_sbiz_id:     sensitivePatch.sbiz_id     ?? null,
-        p_sbiz_pw:     sensitivePatch.sbiz_pw     ?? null,
-        p_resident_id: sensitivePatch.resident_id_front ?? null,
-      })
-      if (error) saveError = error
-    }
+    const saveError = await writePatch(data, dirty)
 
     setIsSaving(false)
     if (saveError) {
@@ -1173,7 +1201,7 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
     if (!isComposingRef.current) {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
       // ref 사용: 타이머 실행 시점의 최신 데이터로 저장 (클로저 캡처 아님)
-      saveTimerRef.current = setTimeout(() => doAutoSave(editDataRef.current, dirtyFieldsRef.current), 300)
+      saveTimerRef.current = setTimeout(() => doAutoSave(editDataRef.current, dirtyFieldsRef.current), AUTOSAVE_DELAY_MS)
     }
   }
 
@@ -1281,8 +1309,13 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
           // 단, onChange가 발화하지 않는 경우(취소)를 위해 여기서도 예약
           if (dirtyFieldsRef.current.size > 0) {
             if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-            saveTimerRef.current = setTimeout(() => doAutoSave(editDataRef.current, dirtyFieldsRef.current), 300)
+            saveTimerRef.current = setTimeout(() => doAutoSave(editDataRef.current, dirtyFieldsRef.current), AUTOSAVE_DELAY_MS)
           }
+        }}
+        // 필드 이탈 시 debounce 대기 없이 즉시 저장 (onBlur는 React에서 버블링됨)
+        onBlur={() => {
+          if (isComposingRef.current || dirtyFieldsRef.current.size === 0) return
+          flushSave()
         }}
       >
         {Object.keys(editData).length === 0 ? (
