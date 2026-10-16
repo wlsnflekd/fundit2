@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import { useT } from '../../theme.jsx'
-import { supabase, getCustomerCredit, updateCustomerCredit } from '../../supabase.js'
+import { supabase } from '../../supabase.js'
 import { DetailSkeleton } from '../Common.jsx'
 import { SIDO_LIST, parseSido, parseSigungu } from '../../utils/region.js'
 import { SigunguField } from './RegionFields.jsx'
@@ -29,17 +29,6 @@ function autoResizeTextarea(el) {
   el.scrollTop = savedScrollTop
   if (scrollParent) scrollParent.scrollTop = parentScrollTop
 }
-
-// 신용·대출·사고 민감 항목 — 일반 UPDATE 경로를 타지 않고 update_customer_credit RPC로만 저장
-// (DB: 0007_customer_call_log.sql 의 update_customer_credit 허용 키와 동일하게 유지)
-const CREDIT_FIELDS = new Set([
-  'kcb_score', 'nice_score',
-  'loan_policy_fund', 'loan_business', 'loan_personal',
-  'rehabilitation', 'rehabilitation_memo',
-  'tax_delinquent', 'tax_delinquent_amount',
-])
-// get_customer_credit 이 반환하는 항목 (existing_loan 은 읽기 전용)
-const CREDIT_READ_FIELDS = [...CREDIT_FIELDS, 'existing_loan']
 
 // 보유 인증 선택지 — DB CHECK(customers_certifications_allowed)와 동일하게 유지
 const CERTIFICATION_OPTIONS = ['특허', 'ISO', '벤처', '이노비즈', '메인비즈', '기업부설연구소', '기타']
@@ -585,51 +574,49 @@ function TabBasic({ data, onChange, consultants, isMobile }) {
 }
 
 // ─── 숫자 입력 + 단위 (숫자만 허용, 빈칸 → null) ──────────────────────
-function NumberInput({ value, onChange, unit, maxLength, placeholder = '0' }) {
+// prefix: 입력칸 안쪽 앞에 붙는 소제목 (예: KCB) — 소제목 줄 없이 다른 입력칸과 같은 높이 유지
+function NumberInput({ value, onChange, unit, prefix, maxLength, placeholder = '0' }) {
   const C = useT()
   const inputStyle = useInputStyle()
+  const input = (
+    <input
+      type="text"
+      inputMode="numeric"
+      style={prefix
+        ? { ...inputStyle, flex: 1, minWidth: 0, border: 'none', background: 'transparent', paddingLeft: 0, borderRadius: 0 }
+        : { ...inputStyle, flex: 1, minWidth: 0 }}
+      value={value ?? ''}
+      maxLength={maxLength}
+      onChange={e => {
+        const v = e.target.value.replace(/[^0-9]/g, '')
+        onChange(v === '' ? null : Number(v))
+      }}
+      placeholder={placeholder}
+    />
+  )
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <input
-        type="text"
-        inputMode="numeric"
-        style={{ ...inputStyle, flex: 1, minWidth: 0 }}
-        value={value ?? ''}
-        maxLength={maxLength}
-        onChange={e => {
-          const v = e.target.value.replace(/[^0-9]/g, '')
-          onChange(v === '' ? null : Number(v))
-        }}
-        placeholder={placeholder}
-      />
+      {prefix ? (
+        // 테두리·배경은 바깥 박스가 그리고, 안쪽 input 은 투명 → 박스 높이 = 일반 입력칸 높이
+        <div style={{
+          display: 'flex', alignItems: 'center', flex: 1, minWidth: 0,
+          border: `1px solid ${C.line}`, borderRadius: inputStyle.borderRadius, background: C.s3,
+        }}>
+          <span style={{ color: C.sub, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', padding: '0 8px 0 10px' }}>
+            {prefix}
+          </span>
+          {input}
+        </div>
+      ) : input}
       {unit && <span style={{ color: C.sub, fontSize: 13, whiteSpace: 'nowrap' }}>{unit}</span>}
-    </div>
-  )
-}
-
-// ─── 신용·대출·사고 항목 접근 게이트 ─────────────────────────────────
-// 권한 없음 → 잠금, 로드 실패 → 오류, 로드 전 → 대기. 로드 전에는 입력란을 보여주지 않아
-// 빈 값으로 오인해 덮어쓰는 것을 방지.
-function CreditGate({ access, children }) {
-  const C = useT()
-  if (access.state === 'ready') return children
-  const text = access.state === 'locked'
-    ? '🔒 담당 컨설턴트와 관리자만 볼 수 있습니다'
-    : access.state === 'error' ? access.error : '불러오는 중...'
-  return (
-    <div style={{
-      padding: '7px 10px', borderRadius: 8, border: `1px dashed ${C.line}`,
-      color: access.state === 'error' ? C.error : C.sub, fontSize: 12,
-    }}>
-      {text}
     </div>
   )
 }
 
 // ─── 탭2: 1차콜 ────────────────────────────────────────────────────
 // 연동 항목은 기본정보와 같은 컬럼을 그대로 사용 (ceo, company, industry, business_type,
-// address, business_reg_date). 🔒 항목은 get/update_customer_credit RPC 경로.
-function TabCallLog({ data, onChange, isMobile, canViewCredit, creditReady, creditError }) {
+// address, business_reg_date). 모든 항목은 일반 customers UPDATE 경로로 저장.
+function TabCallLog({ data, onChange, isMobile }) {
   const C = useT()
   const inputStyle = useInputStyle()
   const notesRef = useRef(null)
@@ -643,11 +630,6 @@ function TabCallLog({ data, onChange, isMobile, canViewCredit, creditReady, cred
     }
   }, [data.call_notes])
 
-  const access = !canViewCredit
-    ? { state: 'locked' }
-    : creditError ? { state: 'error', error: creditError }
-    : creditReady ? { state: 'ready' } : { state: 'loading' }
-
   const isYes = v => v === true || v === 1 || v === 'true'
 
   const certs = Array.isArray(data.certifications) ? data.certifications : []
@@ -657,8 +639,6 @@ function TabCallLog({ data, onChange, isMobile, canViewCredit, creditReady, cred
     const ordered = CERTIFICATION_OPTIONS.filter(o => next.includes(o))
     onChange('certifications', ordered.length ? ordered : null)
   }
-
-  const subLabel = { fontSize: 12, color: C.sub, marginBottom: 4 }
 
   return (
     <div style={gridStyle(isMobile)}>
@@ -709,76 +689,59 @@ function TabCallLog({ data, onChange, isMobile, canViewCredit, creditReady, cred
           onChange={v => onChange('employee_count', v)} />
       </FieldWrapper>
 
-      {/* 8. 전년도 연매출 / 9. 신용점수 🔒 */}
+      {/* 8. 전년도 연매출 / 9. 신용점수 — KCB/NICE 는 입력칸 안쪽 prefix (소제목 줄 없이 같은 높이) */}
       <FieldWrapper label="전년도 연매출">
         <NumberInput value={data.prev_year_revenue} unit="만원" maxLength={12}
           onChange={v => onChange('prev_year_revenue', v)} />
       </FieldWrapper>
-      <FieldWrapper label="신용점수 🔒">
-        <CreditGate access={access}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <div>
-              <div style={subLabel}>KCB</div>
-              <NumberInput value={data.kcb_score} unit="점" maxLength={4}
-                onChange={v => onChange('kcb_score', v)} />
-            </div>
-            <div>
-              <div style={subLabel}>NICE</div>
-              <NumberInput value={data.nice_score} unit="점" maxLength={4}
-                onChange={v => onChange('nice_score', v)} />
-            </div>
+      <FieldWrapper label="신용점수">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <NumberInput value={data.kcb_score} prefix="KCB" maxLength={4}
+            onChange={v => onChange('kcb_score', v)} />
+          <NumberInput value={data.nice_score} prefix="NICE" maxLength={4}
+            onChange={v => onChange('nice_score', v)} />
+        </div>
+      </FieldWrapper>
+
+      {/* 10. 기존 대출 — 종류는 prefix, 단위는 라벨에 표기 (3칸 폭 확보) */}
+      <FieldWrapper label="기존 대출 (만원)" spanFull>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+          {[
+            ['loan_policy_fund', '정책자금'],
+            ['loan_business', '사업자'],
+            ['loan_personal', '개인'],
+          ].map(([field, label]) => (
+            <NumberInput key={field} value={data[field]} prefix={label} maxLength={12}
+              onChange={v => onChange(field, v)} />
+          ))}
+        </div>
+        {data.existing_loan != null && (
+          <div style={{ fontSize: 12, color: C.sub, marginTop: 6 }}>
+            이전 입력 합계(읽기 전용): {Number(data.existing_loan).toLocaleString()}만원
           </div>
-        </CreditGate>
+        )}
       </FieldWrapper>
 
-      {/* 10. 기존 대출 🔒 */}
-      <FieldWrapper label="기존 대출 🔒" spanFull>
-        <CreditGate access={access}>
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 8 }}>
-            {[
-              ['loan_policy_fund', '정책자금'],
-              ['loan_business', '사업자'],
-              ['loan_personal', '개인'],
-            ].map(([field, label]) => (
-              <div key={field}>
-                <div style={subLabel}>{label}</div>
-                <NumberInput value={data[field]} unit="만원" maxLength={12}
-                  onChange={v => onChange(field, v)} />
-              </div>
-            ))}
+      {/* 11. 회생·파산 등 사고이력 */}
+      <FieldWrapper label="회생·파산 등 사고이력" spanFull>
+        <TriStatePair value={data.rehabilitation} onChange={v => onChange('rehabilitation', v)} />
+        {isYes(data.rehabilitation) && (
+          <input style={{ ...inputStyle, marginTop: 8 }} value={data.rehabilitation_memo ?? ''}
+            onChange={e => onChange('rehabilitation_memo', e.target.value || null)}
+            placeholder="사고이력 내용 (예: 2022년 개인회생 인가, 변제 진행 중)" />
+        )}
+      </FieldWrapper>
+
+      {/* 12. 세금체납 / 13. 폐업이력 */}
+      <FieldWrapper label="세금체납">
+        <TriStatePair value={data.tax_delinquent} onChange={v => onChange('tax_delinquent', v)} />
+        {isYes(data.tax_delinquent) && (
+          <div style={{ marginTop: 8 }}>
+            <NumberInput value={data.tax_delinquent_amount} unit="만원" maxLength={12}
+              placeholder="체납 금액"
+              onChange={v => onChange('tax_delinquent_amount', v)} />
           </div>
-          {data.existing_loan != null && (
-            <div style={{ fontSize: 12, color: C.sub, marginTop: 6 }}>
-              이전 입력 합계(읽기 전용): {Number(data.existing_loan).toLocaleString()}만원
-            </div>
-          )}
-        </CreditGate>
-      </FieldWrapper>
-
-      {/* 11. 회생·파산 등 사고이력 🔒 */}
-      <FieldWrapper label="회생·파산 등 사고이력 🔒" spanFull>
-        <CreditGate access={access}>
-          <TriStatePair value={data.rehabilitation} onChange={v => onChange('rehabilitation', v)} />
-          {isYes(data.rehabilitation) && (
-            <input style={{ ...inputStyle, marginTop: 8 }} value={data.rehabilitation_memo ?? ''}
-              onChange={e => onChange('rehabilitation_memo', e.target.value || null)}
-              placeholder="사고이력 내용 (예: 2022년 개인회생 인가, 변제 진행 중)" />
-          )}
-        </CreditGate>
-      </FieldWrapper>
-
-      {/* 12. 세금체납 🔒 / 13. 폐업이력 */}
-      <FieldWrapper label="세금체납 🔒">
-        <CreditGate access={access}>
-          <TriStatePair value={data.tax_delinquent} onChange={v => onChange('tax_delinquent', v)} />
-          {isYes(data.tax_delinquent) && (
-            <div style={{ marginTop: 8 }}>
-              <NumberInput value={data.tax_delinquent_amount} unit="만원" maxLength={12}
-                placeholder="체납 금액"
-                onChange={v => onChange('tax_delinquent_amount', v)} />
-            </div>
-          )}
-        </CreditGate>
+        )}
       </FieldWrapper>
       <FieldWrapper label="폐업이력">
         <TriStatePair value={data.closure_history} onChange={v => onChange('closure_history', v)} />
@@ -849,7 +812,7 @@ function TabCallLog({ data, onChange, isMobile, canViewCredit, creditReady, cred
 // 300ms(타이핑 중 잦은 저장) → 1000ms 로 완화. 필드 이탈(blur) 시에는 즉시 저장.
 const AUTOSAVE_DELAY_MS = 1000
 
-const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, profile, onClose, onUpdate, consultants = [], isDuplicate = false }, ref) {
+const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, onClose, onUpdate, consultants = [], isDuplicate = false }, ref) {
   const C = useT()
   const [editData, setEditData] = useState({})
   const [dirtyFields, setDirtyFields] = useState(new Set())
@@ -858,10 +821,6 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
   const [savedOk, setSavedOk] = useState(false)
   const [activeTab, setActiveTab] = useState('basic')
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
-  // 신용·대출·사고 민감 항목(CREDIT_FIELDS) — get_customer_credit RPC 로 별도 로드
-  const [creditError, setCreditError] = useState('')
-  const [creditReady, setCreditReady] = useState(false)
-  const creditLoadedRef = useRef(false)
 
   // 최신 데이터를 타이머 콜백에서 참조하기 위한 ref
   const editDataRef = useRef({})
@@ -874,28 +833,10 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
 
   // dirty 필드만 DB에 기록 (상태 갱신 없음) — 반환: error 또는 null
   const writePatch = async (data, dirty) => {
-    const regularPatch = {}
-    const creditPatch = {}
-    dirty.forEach(f => {
-      if (CREDIT_FIELDS.has(f)) creditPatch[f] = data[f] ?? null
-      else regularPatch[f] = data[f]
-    })
-
-    let saveError = null
-
-    // 일반 필드: 기존 직접 UPDATE 경로
-    if (Object.keys(regularPatch).length > 0) {
-      const { error } = await supabase.from('customers').update(regularPatch).eq('id', data.id)
-      if (error) saveError = error
-    }
-
-    // 신용·대출·사고 항목: RPC 경로 (DB 레벨 역할 체크, null 전달 시 값 지움)
-    if (Object.keys(creditPatch).length > 0 && !saveError) {
-      const { error } = await updateCustomerCredit(data.id, creditPatch)
-      if (error) saveError = error
-    }
-
-    return saveError
+    const patch = {}
+    dirty.forEach(f => { patch[f] = data[f] })
+    const { error } = await supabase.from('customers').update(patch).eq('id', data.id)
+    return error || null
   }
 
   // 고객 전환/언마운트 직전: 대기 중인 변경분을 스냅샷으로 기록 (fire-and-forget)
@@ -932,27 +873,20 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
       editDataRef.current = data
       dirtyFieldsRef.current = new Set()
       saveFailCountRef.current = 0
-      creditLoadedRef.current = false
       setEditData(data)
       setDirtyFields(new Set())
       setSaveError('')
       setSavedOk(false)
       setIsSaving(false)
-      setCreditError('')
-      setCreditReady(false)
     } else {
       // 같은 고객 갱신(Realtime UPDATE 또는 자동저장 후 onUpdate)
       // dirty 필드는 사용자가 편집 중이므로 서버 데이터로 덮어쓰지 않음
       const currentDirty = dirtyFieldsRef.current
       const merged = { ...customer }
       currentDirty.forEach(f => { merged[f] = editDataRef.current[f] })
-      // 목록 행(SAFE_CUSTOMER_COLS)에는 신용 항목이 없으므로, 갱신 데이터에 키가 없으면 RPC로 받은 값 유지
-      CREDIT_READ_FIELDS.forEach(f => {
-        if (!(f in customer) && f in editDataRef.current) merged[f] = editDataRef.current[f]
-      })
       editDataRef.current = merged
       setEditData(merged)
-      // dirtyFields, saveError, savedOk, isSaving, creditReady는 그대로 유지
+      // dirtyFields, saveError, savedOk, isSaving는 그대로 유지
     }
   }, [customer]) // eslint-disable-line react-hooks/exhaustive-deps -- persistPending 은 ref 만 읽으므로 의존성 불필요
 
@@ -969,12 +903,6 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
       persistPending()
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const isAdmin = profile?.role === 'admin' || profile?.role === 'superadmin'
-  // 본인이 담당 컨설턴트인지 — consultant 컬럼은 profiles.id(uuid) 참조
-  const isAssignedConsultant = !isAdmin && customer?.consultant === profile?.id
-  // 신용·대출·사고 항목 열람/수정 권한: admin이거나, staff 본인이 담당하는 고객 (DB RPC 와 동일 기준)
-  const canViewCredit = isAdmin || isAssignedConsultant
 
   // ── 패널 너비 드래그 조절 ────────────────────────────────────────
   const DEFAULT_PANEL_WIDTH = 480
@@ -1011,34 +939,6 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
     document.addEventListener('mousemove', onMouseMove)
     document.addEventListener('mouseup', onMouseUp)
   }
-
-  // 1차콜 탭 진입 시 신용·대출·사고 항목 로드 (열람 권한 있을 때만, 이미 로드됐으면 재요청 안 함)
-  useEffect(() => {
-    if (activeTab !== 'call' || !canViewCredit || !customer?.id) return
-    if (creditLoadedRef.current) return
-    creditLoadedRef.current = true
-    const customerId = customer.id
-    getCustomerCredit(customerId).then(({ data, error }) => {
-      // 응답 도착 전 다른 고객으로 전환됐으면 무시
-      if (editDataRef.current?.id !== customerId) return
-      if (error) {
-        creditLoadedRef.current = false // 탭 재진입 시 재시도 허용
-        const msg = error.code === 'PGRST202'
-          ? '신용정보 함수가 DB에 등록되지 않았습니다. (0007 마이그레이션 실행 필요)'
-          : `신용·대출 정보를 불러올 수 없습니다. (${error.message})`
-        setCreditError(msg)
-        return
-      }
-      if (!data) return
-      // 로드 중 사용자가 이미 수정한 항목은 덮어쓰지 않음
-      const fresh = { ...data }
-      dirtyFieldsRef.current.forEach(f => { delete fresh[f] })
-      editDataRef.current = { ...editDataRef.current, ...fresh }
-      setEditData(editDataRef.current)
-      setCreditError('')
-      setCreditReady(true)
-    })
-  }, [activeTab, customer?.id, canViewCredit])
 
   const doAutoSave = async (data, dirty) => {
     if (dirty.size === 0 || !data.id) return
@@ -1214,9 +1114,6 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
                 data={editData}
                 onChange={handleChange}
                 isMobile={isMobile}
-                canViewCredit={canViewCredit}
-                creditReady={creditReady}
-                creditError={creditError}
               />
             )}
           </>
