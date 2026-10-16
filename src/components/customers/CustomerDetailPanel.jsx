@@ -4,6 +4,7 @@ import { supabase } from '../../supabase.js'
 import { DetailSkeleton } from '../Common.jsx'
 import { SIDO_LIST, parseSido, parseSigungu } from '../../utils/region.js'
 import { SigunguField } from './RegionFields.jsx'
+import TabDocuments from './TabDocuments.jsx'
 
 // ─── textarea auto-resize 헬퍼 ────────────────────────────────────────
 // height='auto' → reflow → 브라우저가 cursor를 viewport에 맞추려 부모 스크롤을 이동시키는 버그 방지
@@ -1005,10 +1006,11 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
 
   useImperativeHandle(ref, () => ({ flushSave }))
 
-  // 서류정보 탭은 별도 작업으로 추가 예정 (기존 사업정보·인증정보 탭은 화면에서 제거, 컬럼은 보존)
+  // 기존 사업정보·인증정보 탭은 화면에서 제거 (컬럼은 보존)
   const TABS = [
     { id: 'basic', label: '기본정보' },
     { id: 'call',  label: '1차콜' },
+    { id: 'docs',  label: '서류정보' },
   ]
 
   const panelWidth = isMobile ? '100vw' : panelWidthState
@@ -1113,6 +1115,15 @@ const CustomerDetailPanel = forwardRef(function CustomerDetailPanel({ customer, 
               <TabCallLog
                 data={editData}
                 onChange={handleChange}
+                isMobile={isMobile}
+              />
+            )}
+            {/* 서류는 별도 테이블(customer_documents) — 자체 저장 로직. key 로 고객 전환 시 언마운트 → 대기 메모 저장 */}
+            {activeTab === 'docs' && editData.id && (
+              <TabDocuments
+                key={editData.id}
+                customerId={editData.id}
+                businessType={editData.business_type}
                 isMobile={isMobile}
               />
             )}

@@ -445,6 +445,26 @@ export const deleteCustomer = async (customerId) => {
   return { error }
 }
 
+// 고객 서류 체크리스트 조회 (customer_documents, 0010) — 행이 없는 서류는 화면에서 '미요청'
+export const getCustomerDocuments = async (customerId) => {
+  const { data, error } = await supabase
+    .from('customer_documents')
+    .select('id, doc_type, status, received_at, note, updated_at')
+    .eq('customer_id', customerId)
+  return { data, error }
+}
+
+// 서류 1건 저장 — (customer_id, doc_type) 기준 upsert. workspace_id·updated_at·updated_by 는 DB 트리거가 채움
+export const upsertCustomerDocument = async (customerId, docType, { status, received_at, note }) => {
+  const { error } = await supabase
+    .from('customer_documents')
+    .upsert(
+      { customer_id: customerId, doc_type: docType, status, received_at, note },
+      { onConflict: 'customer_id,doc_type' }
+    )
+  return { error }
+}
+
 // 고객사 신규 등록
 export const createCustomer = async (customerData) => {
   const { data, error } = await supabase
