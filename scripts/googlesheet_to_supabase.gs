@@ -1,83 +1,160 @@
 // ============================================================
-// FUNDIT — 구글 폼 → Supabase customers 테이블 자동 연동
-// 파일: googlesheet_to_supabase.gs
+// FUNDIT — 구글시트 → Supabase 연동 [통합 완성본]
+// 최종 수정: 2026-10-16 (국세체납 3단계: 있음/없음/빈칸=미확인)
 //
-// [설정 방법]
-// 1. Google Apps Script 에디터 열기:
-//    시트 메뉴 → 확장 프로그램 → Apps Script
+// [이번 수정 핵심]
+// submit_customer_form RPC는 중복 고객이어도 HTTP 200을 반환한다.
+//   - 신규 등록 성공 → body = "uuid"
+//   - 중복(스킵)      → body = null
+// 기존 코드는 code === 200 만 보고 성공 처리 → 중복이 "전송완료"로 위장됨.
+// 이제 BODY 로 판별하여 성공 / 중복 / 실패 3가지로 구분한다.
 //
-// 2. Script Properties 설정 (⚠️ 코드에 직접 키 입력 금지):
-//    Apps Script 에디터 → 프로젝트 설정(⚙️) → 스크립트 속성 → 속성 추가
-//    - SUPABASE_URL  : https://ddivdcsierbngtuxtdyu.supabase.co
-//    - SUPABASE_KEY  : (ANON KEY — .env 파일의 VITE_SUPABASE_ANON_KEY 값)
+// [2026-10-16]
+// 국세체납여부: parseBoolean → parseTriState
+//   있음 → true / 없음 → false / 빈칸·판별불가 → null(미확인)
+// 필요자금: AI예상금액을 더 이상 required_funds에 넣지 않음 (null)
+//   "1,500만원5억원" 같은 범위 문자열이 숫자로 이어 붙어 잘못 저장되던 문제
 //
-// 3. 트리거 설정:
-//    Apps Script 에디터 → 트리거(⏰) → 트리거 추가
-//    - 실행할 함수: onFormSubmit
-//    - 이벤트 소스: 스프레드시트에서
-//    - 이벤트 유형: 양식 제출 시
+// [시트 구성]
+// - 종합시트 : 자동 전송 (onSheetChange 트리거), P열(16) 전송여부
+// - 당근광고 : 메뉴 버튼 일괄 전송, G열(7) 전송여부, H열(8) 비고
 //
-// 4. 처음 실행 시 Google 계정 권한 승인 필요
+// [설정]
+// 프로젝트 설정(⚙️) → 스크립트 속성
+//   - SUPABASE_URL : https://ddivdcsierbngtuxtdyu.supabase.co
+//   - SUPABASE_KEY : (ANON KEY)
+// 트리거: onSheetChange / 스프레드시트에서 / 변경 시(onChange)
 // ============================================================
 
-// ── 시트 컬럼 인덱스 정의 (0-based) ────────────────────────
-// 구글 폼 응답 시트의 컬럼 순서와 일치해야 합니다.
-// 컬럼 순서가 바뀌면 여기 숫자만 수정하세요.
+
+// ── 시트 컬럼 인덱스 정의 (0-based, 종합시트) ────────────────
 var COL = {
-  제출일시:      0,   // A: 제출일시
-  유입채널:      1,   // B: 유입채널
-  업체명:        2,   // C: 이름 또는 업체명
-  전화번호:      3,   // D: 전화번호
-  사업자번호:    4,   // E: 사업자번호
-  사업자상태:    5,   // F: 사업자상태
-  사업자유형:    6,   // G: 사업자유형
-  업종:          7,   // H: 업종
-  사업운영기간:  8,   // I: 사업운영기간
-  월평균매출:    9,   // J: 월평균매출
-  지역:          10,  // K: 지역
-  국세체납여부:  11,  // L: 국세체납여부 (있음/없음)
-  AI추천기관:    12,  // M: AI추천기관
-  AI예상금액:    13,  // N: AI예상금액
-  AI분석결과:    14,  // O: AI분석결과
-  // ⚠️ 아래 컬럼은 구글 폼에 해당 질문이 추가된 경우에만 활성화하세요.
-  // 컬럼 인덱스(숫자)를 실제 시트 순서에 맞게 수정해야 합니다.
-  // 연체이력:      15,  // P: 연체이력 (있음/없음)
-  // 회생파산복구:  16,  // Q: 회생/파산복구 (있음/없음)
-  // 폐업이력:      17,  // R: 폐업이력 (있음/없음)
-  // 정책자금사용:  18,  // S: 정책자금 사용여부 (있음/없음)
-  // 스마트기기:    19,  // T: 스마트기기 이용여부 (있음/없음)
-  // 수출여부:      20,  // U: 수출여부 (있음/없음)
+  제출일시:      0,
+  유입채널:      1,
+  업체명:        2,
+  전화번호:      3,
+  사업자번호:    4,
+  사업자상태:    5,
+  사업자유형:    6,
+  업종:          7,
+  사업운영기간:  8,
+  월평균매출:    9,
+  지역:          10,
+  국세체납여부:  11,
+  AI추천기관:    12,
+  AI예상금액:    13,
+  AI분석결과:    14,
+  전송여부:      15,  // P열 (16번째)
 };
 
 // ── 워크스페이스 ID ─────────────────────────────────────────
 var WORKSPACE_ID = 'a1650b9e-31da-43e6-9179-17390d06f58c';
 
-// ── 메인 트리거 함수 (외부 폼 → 시트 행 추가 시 자동 실행) ──
-// 트리거 설정: 이벤트 소스 = 스프레드시트에서 / 이벤트 유형 = 변경 시
+
+// ============================================================
+// 공통 — Supabase RPC 호출 및 결과 판별
+// 반환: { status: 'success' | 'duplicate' | 'error', id, message }
+// ============================================================
+function callSubmitRpc(rpcPayload) {
+  var props = PropertiesService.getScriptProperties();
+  var url   = props.getProperty('SUPABASE_URL')
+              || 'https://ddivdcsierbngtuxtdyu.supabase.co';
+  var key   = props.getProperty('SUPABASE_KEY')
+              || 'sb_publishable_VTfgbfTQGpLsWi6cjgrFvQ_OezMLa1C';
+
+  var response = UrlFetchApp.fetch(url + '/rest/v1/rpc/submit_customer_form', {
+    method:      'POST',
+    contentType: 'application/json',
+    headers: {
+      'apikey':        key,
+      'Authorization': 'Bearer ' + key,
+    },
+    payload:            JSON.stringify(rpcPayload),
+    muteHttpExceptions: true,
+  });
+
+  var code = response.getResponseCode();
+  var body = response.getContentText();
+
+  // HTTP 자체 실패
+  if (code !== 200) {
+    return { status: 'error', message: 'HTTP ' + code + ' — ' + body };
+  }
+
+  // 200이지만 body가 null → RPC가 중복으로 판단하고 스킵
+  var trimmed = String(body).trim();
+  if (trimmed === '' || trimmed === 'null') {
+    return { status: 'duplicate', message: 'CRM에 이미 등록된 번호' };
+  }
+
+  var id;
+  try {
+    id = JSON.parse(trimmed);
+  } catch (e) {
+    return { status: 'error', message: '응답 파싱 실패: ' + trimmed };
+  }
+
+  if (!id) {
+    return { status: 'duplicate', message: 'CRM에 이미 등록된 번호' };
+  }
+
+  return { status: 'success', id: id };
+}
+
+
+// ============================================================
+// 종합시트 — 자동 전송 (onChange 트리거)
+// ============================================================
 function onSheetChange(e) {
-  // 행 추가(INSERT_ROW)일 때만 처리
   if (e && e.changeType !== 'INSERT_ROW') return;
 
   try {
-    var row = getLastRow();
-    if (!row) {
-      Logger.log('[ERROR] 행 데이터를 가져올 수 없습니다.');
+    var sheet = SpreadsheetApp.getActiveSpreadsheet()
+                               .getSheetByName('종합시트');
+    if (!sheet) {
+      Logger.log('[ERROR] "종합시트" 시트를 찾을 수 없습니다.');
       return;
     }
 
-    // 업체명(COL.업체명)이 비어 있으면 헤더행 또는 빈 행 → 스킵
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return;
+
+    var numCols = Math.max(sheet.getLastColumn(), 16);
+
+    // 중복 방지: P열(전송여부) 확인
+    var sentFlag = sheet.getRange(lastRow, 16).getValue();
+    if (sentFlag && String(sentFlag).trim() !== '') {
+      Logger.log('[SKIP] 이미 처리된 행 ' + lastRow + ': ' + sentFlag);
+      return;
+    }
+
+    var row = sheet.getRange(lastRow, 1, 1, numCols).getValues()[0];
+
     if (!row[COL.업체명] || String(row[COL.업체명]).trim() === '') {
-      Logger.log('[SKIP] 빈 행 또는 헤더행 감지, 처리 생략');
+      Logger.log('[SKIP] 빈 행 또는 업체명 없음 (행 ' + lastRow + ')');
       return;
     }
 
-    var customer = buildCustomerPayload(row);
-    var result   = insertToSupabase(customer);
+    if (!row[COL.전화번호] || String(row[COL.전화번호]).trim() === '') {
+      Logger.log('[SKIP] 전화번호 없음 (행 ' + lastRow + ')');
+      return;
+    }
 
-    if (result.success) {
-      Logger.log('[OK] 고객사 등록 완료: ' + customer.company);
+    var customer  = buildCustomerPayload(row);
+    var result    = insertToSupabase(customer);
+    var timestamp = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm');
+
+    if (result.status === 'success') {
+      sheet.getRange(lastRow, 16).setValue('✅ ' + timestamp);
+      Logger.log('[OK] 신규 등록: ' + customer.company + ' (행 ' + lastRow + ')');
+
+    } else if (result.status === 'duplicate') {
+      sheet.getRange(lastRow, 16).setValue('🔁 ' + timestamp + ' 중복');
+      Logger.log('[DUP] 기존 고객: ' + customer.company + ' (행 ' + lastRow + ')');
+
     } else {
-      Logger.log('[ERROR] Supabase 응답: ' + result.message);
+      sheet.getRange(lastRow, 16).setValue('❌ 오류');
+      Logger.log('[ERROR] ' + result.message);
       sendErrorAlert(customer.company, result.message);
     }
 
@@ -87,20 +164,6 @@ function onSheetChange(e) {
   }
 }
 
-// ── 시트에서 마지막 행 읽기 ──────────────────────────────────
-function getLastRow() {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet()
-                             .getSheetByName('종합시트');
-  if (!sheet) {
-    Logger.log('[ERROR] "종합시트" 시트를 찾을 수 없습니다.');
-    return null;
-  }
-  var lastRow  = sheet.getLastRow();
-  var numCols  = sheet.getLastColumn();
-  if (lastRow < 2) return null; // 헤더만 있는 경우
-  var rowRange = sheet.getRange(lastRow, 1, 1, numCols);
-  return rowRange.getValues()[0];
-}
 
 // ── Supabase INSERT 페이로드 생성 ───────────────────────────
 function buildCustomerPayload(row) {
@@ -110,39 +173,27 @@ function buildCustomerPayload(row) {
   var businessType  = cleanString(row[COL.사업자유형]);
   var industry      = cleanString(row[COL.업종]);
   var region        = cleanString(row[COL.지역]);
-  var businessAge  = cleanString(row[COL.사업운영기간]);
-  var monthlyRev   = cleanString(row[COL.월평균매출]);
+  var businessAge   = cleanString(row[COL.사업운영기간]);
+  var monthlyRev    = cleanString(row[COL.월평균매출]);
   var receivedDate  = parseDateSafe(row[COL.제출일시]);
 
-  // ── Boolean 필드 파싱 ────────────────────────────────────────
-  // parseBoolean() 규칙: "있음"/"예"/"Y"/"true"/"1" → true, 그 외("없음" 포함) → false
-  // ⚠️ 반전 로직 없음 — "있음" = true, "없음" = false 그대로 DB에 저장
-  // 세금체납은 3단계(미확인/있음/없음) — 빈칸·판별 불가는 null(미확인)로 저장 (0007)
-  var taxDelinquent   = parseTriState(row[COL.국세체납여부]);
-  // 아래 필드는 COL에서 해당 인덱스를 활성화(주석 해제)한 뒤 사용하세요
-  var overdueHistory  = COL.연체이력    !== undefined ? parseBoolean(row[COL.연체이력])    : null;
-  var rehabilitation  = COL.회생파산복구 !== undefined ? parseBoolean(row[COL.회생파산복구]) : null;
-  var closureHistory  = COL.폐업이력    !== undefined ? parseBoolean(row[COL.폐업이력])    : null;
-  var policyFundUsage = COL.정책자금사용 !== undefined ? parseBoolean(row[COL.정책자금사용]) : null;
-  var smartDevice     = COL.스마트기기   !== undefined ? parseBoolean(row[COL.스마트기기])   : null;
-  var isExporter      = COL.수출여부     !== undefined ? parseBoolean(row[COL.수출여부])     : null;
+  // 국세체납: 있음/없음/빈칸(미확인) 3단계
+  var taxDelinquent = parseTriState(row[COL.국세체납여부]);
 
-  // 사업자번호 → business_reg_no 직접 매칭
   var bizNum    = cleanString(row[COL.사업자번호]);
   var bizStatus = cleanString(row[COL.사업자상태]);
 
-  // 사업자상태만 tags에 저장
   var tags = [];
   if (bizStatus) tags.push('사업자상태:' + bizStatus);
 
-  // AI 분석 결과 → consultation_memo로 합산
   var aiOrg      = cleanString(row[COL.AI추천기관]);
   var aiAmount   = cleanString(row[COL.AI예상금액]);
   var aiAnalysis = cleanString(row[COL.AI분석결과]);
   var memo = buildMemo(aiOrg, aiAmount, aiAnalysis);
 
-  // AI 예상금액 → required_funds (숫자 추출)
-  var requiredFunds = parseNumericSafe(row[COL.AI예상금액]);
+  // 필요자금은 상담 시 직원이 직접 입력 (AI예상금액 범위 문자열은 숫자로 변환 불가)
+  // AI예상금액 원문은 consultation_memo의 [AI예상금액] 줄에 그대로 남는다.
+  var requiredFunds = null;
 
   return {
     workspace_id:      WORKSPACE_ID,
@@ -154,87 +205,50 @@ function buildCustomerPayload(row) {
     region:            region,
     business_age:      businessAge,
     monthly_revenue:   monthlyRev,
-    // ── Boolean 필드 (있음=true, 없음=false — parseBoolean() 기준, 반전 없음) ──
     tax_delinquent:    taxDelinquent,
-    overdue_history:   overdueHistory,
-    rehabilitation:    rehabilitation,
-    closure_history:   closureHistory,
-    policy_fund_usage: policyFundUsage,
-    smart_device:      smartDevice,
-    is_exporter:       isExporter,
     required_funds:    requiredFunds,
     consultation_memo: memo,
     tags:              tags.length > 0 ? tags : null,
     received_date:     receivedDate,
     business_reg_no:   bizNum,
-    status:            '신규',       // 초기 CRM 상태
+    status:            '신규',
     score:             0,
     pool:              false,
   };
 }
 
-// ── Supabase RPC 호출 (submit_customer_form) ────────────────
-// 직접 INSERT 대신 SECURITY DEFINER RPC 사용
-// → anon 키로도 RLS 우회 가능, 서비스 키 불필요
-function insertToSupabase(payload) {
-  var props = PropertiesService.getScriptProperties();
-  var url   = props.getProperty('SUPABASE_URL')
-              || 'https://ddivdcsierbngtuxtdyu.supabase.co';
-  var key   = props.getProperty('SUPABASE_KEY')
-              || 'sb_publishable_VTfgbfTQGpLsWi6cjgrFvQ_OezMLa1C';
 
-  // REST 파라미터명은 함수 인자명 앞에 p_ 제거한 형태로 전달
-  var rpcPayload = {
+// ── 종합시트용 RPC 호출 래퍼 ────────────────────────────────
+function insertToSupabase(payload) {
+  var result = callSubmitRpc({
     p_workspace_id:      payload.workspace_id,
     p_company:           payload.company,
     p_phone:             payload.phone,
     p_lead_source:       payload.lead_source,
     p_business_type:     payload.business_type,
     p_industry:          payload.industry,
-    // payload.region 은 폼 응답 자유 텍스트일 수 있음 ("경기도 남양주시" 등).
-    // DB 트리거 trg_customers_normalize_region 이 저장 시점에 17개 시/도 표준값으로
-    // 정규화하고 원문은 customers.address 에 보존함 (supabase/migrations/0004_customers_region_normalize.sql)
     p_region:            payload.region,
     p_business_age:      payload.business_age,
     p_monthly_revenue:   payload.monthly_revenue,
-    // ── Boolean 필드 (null이면 RPC에서 DB 기본값 사용) ──────────
     p_tax_delinquent:    payload.tax_delinquent,
     p_required_funds:    payload.required_funds,
     p_consultation_memo: payload.consultation_memo,
     p_tags:              payload.tags,
     p_received_date:     payload.received_date,
     p_business_reg_no:   payload.business_reg_no,
+  });
+
+  return {
+    success:   result.status === 'success',
+    duplicate: result.status === 'duplicate',
+    status:    result.status,
+    id:        result.id,
+    message:   result.message,
   };
-
-  var endpoint = url + '/rest/v1/rpc/submit_customer_form';
-
-  var options = {
-    method:      'POST',
-    contentType: 'application/json',
-    headers: {
-      'apikey':        key,
-      'Authorization': 'Bearer ' + key,
-    },
-    payload:            JSON.stringify(rpcPayload),
-    muteHttpExceptions: true,
-  };
-
-  var response = UrlFetchApp.fetch(endpoint, options);
-  var code     = response.getResponseCode();
-
-  if (code === 200) {
-    return { success: true };
-  } else {
-    return {
-      success: false,
-      message: 'HTTP ' + code + ' — ' + response.getContentText(),
-    };
-  }
 }
 
-// ── 에러 알림 이메일 (선택) ─────────────────────────────────
-// 오류 시 스프레드시트 소유자에게 이메일 발송
-// 불필요하면 이 함수 내용을 지우세요.
+
+// ── 에러 알림 이메일 ────────────────────────────────────────
 function sendErrorAlert(company, message) {
   var email   = Session.getEffectiveUser().getEmail();
   var subject = '[FUNDIT] 고객사 등록 실패: ' + company;
@@ -242,7 +256,10 @@ function sendErrorAlert(company, message) {
   MailApp.sendEmail(email, subject, body);
 }
 
-// ── 유틸리티 함수 ───────────────────────────────────────────
+
+// ============================================================
+// 유틸리티 함수
+// ============================================================
 
 function cleanString(val) {
   if (val === null || val === undefined) return null;
@@ -250,42 +267,17 @@ function cleanString(val) {
   return s === '' ? null : s;
 }
 
-// 정수 추출 — business_age/monthly_revenue에는 사용 금지 (text 컬럼)
-// required_funds 등 순수 숫자 필드에만 사용
-function parseIntSafe(val) {
-  if (val === null || val === undefined || val === '') return null;
-  var s = String(val).replace(/[^0-9]/g, '');
-  if (s === '') return null;
-  var n = parseInt(s, 10);
-  return isNaN(n) ? null : n;
-}
-
-// 숫자 추출 — business_age/monthly_revenue에는 사용 금지 (text 컬럼)
-// "500만원", "1,200,000" 등 순수 숫자 필드에만 사용 (만원 단위 → 원으로 변환)
 function parseNumericSafe(val) {
   if (val === null || val === undefined || val === '') return null;
   var s = String(val).replace(/,/g, '').trim();
-
-  // 만원 단위 명시된 경우 → 10000 곱하기
   if (s.indexOf('만') !== -1) {
     s = s.replace(/[^0-9.]/g, '');
     var n = parseFloat(s);
     return isNaN(n) ? null : Math.round(n * 10000);
   }
-
   s = s.replace(/[^0-9.]/g, '');
   var n = parseFloat(s);
   return isNaN(n) ? null : n;
-}
-
-// "있음", "예", "Y", "true", "1" → true / 그 외("없음" 포함) → false
-// 3단계 파싱: 있음 → true, 없음 → false, 빈칸·그 외 → null(미확인)
-function parseTriState(val) {
-  if (val === null || val === undefined) return null;
-  var s = String(val).trim().toLowerCase();
-  if (s === '있음' || s === '예' || s === 'y' || s === 'yes' || s === 'true' || s === '1') return true;
-  if (s === '없음' || s === '아니오' || s === 'n' || s === 'no' || s === 'false' || s === '0') return false;
-  return null;
 }
 
 function parseBoolean(val) {
@@ -294,7 +286,15 @@ function parseBoolean(val) {
   return s === '있음' || s === '예' || s === 'y' || s === 'yes' || s === 'true' || s === '1';
 }
 
-// Date 객체 또는 날짜 문자열 → "YYYY-MM-DD"
+// 3단계: 있음 → true, 없음 → false, 빈칸·그 외 → null(미확인)
+function parseTriState(val) {
+  if (val === null || val === undefined) return null;
+  var s = String(val).trim().toLowerCase();
+  if (s === '있음' || s === '예' || s === 'y' || s === 'yes' || s === 'true' || s === '1') return true;
+  if (s === '없음' || s === '아니오' || s === 'n' || s === 'no' || s === 'false' || s === '0') return false;
+  return null;
+}
+
 function parseDateSafe(val) {
   if (!val) return null;
   try {
@@ -309,7 +309,6 @@ function parseDateSafe(val) {
   }
 }
 
-// AI 분석 결과 3개 필드를 consultation_memo로 합산
 function buildMemo(org, amount, analysis) {
   var parts = [];
   if (org)      parts.push('[AI추천기관] ' + org);
@@ -318,10 +317,180 @@ function buildMemo(org, amount, analysis) {
   return parts.length > 0 ? parts.join('\n') : null;
 }
 
-// ── 수동 테스트 함수 ─────────────────────────────────────────
-// Apps Script 에디터에서 직접 실행하여 마지막 행으로 테스트
+function normalizePhone(phone) {
+  if (!phone) return null;
+  var p = String(phone).replace(/[^0-9]/g, '');
+  if (p.startsWith('10')) p = '0' + p;
+  if (p.length === 10 || p.length === 11) {
+    return p.replace(/^(\d{3})(\d{3,4})(\d{4})$/, '$1-$2-$3');
+  }
+  return String(phone).trim();
+}
+
+
+// ── 수동 테스트 함수 (종합시트 마지막 행) ────────────────────
 function testManual() {
   Logger.log('=== 수동 테스트 시작 (마지막 행) ===');
   onSheetChange({ changeType: 'INSERT_ROW' });
   Logger.log('=== 완료. 로그를 확인하세요 ===');
+}
+
+
+// ============================================================
+// 당근광고 → FUNDIT2 일괄 전송
+// 시트탭: 당근광고
+// 컬럼: A=접수일시 B=이름 C=연락처 D=사업자유형 E=업종 F=사업운영기간
+//       G=전송여부 H=비고
+// 실행: 상단 메뉴 [📣 당근광고 전송] → [펀딧으로 전송]
+// ============================================================
+function sendDanggeunLeads() {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('당근광고');
+
+  if (!sheet) {
+    SpreadsheetApp.getUi().alert('⚠️ "당근광고" 시트를 찾을 수 없습니다.');
+    return;
+  }
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    SpreadsheetApp.getUi().alert('전송할 데이터가 없습니다.');
+    return;
+  }
+
+  var data  = sheet.getRange(2, 1, lastRow - 1, 8).getValues();
+  var today = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd');
+
+  var successCount   = 0;
+  var duplicateCount = 0;
+  var skipCount      = 0;
+  var errorCount     = 0;
+  var errors         = [];
+
+  data.forEach(function(row, i) {
+    var actualRow = i + 2;
+
+    // 이미 처리된 행 스킵
+    if (row[6] && String(row[6]).trim() !== '') {
+      skipCount++;
+      return;
+    }
+
+    var phone = normalizePhone(row[2]);
+    if (!phone) {
+      sheet.getRange(actualRow, 7).setValue('❌ ' + today + ' 실패');
+      sheet.getRange(actualRow, 8).setValue('연락처 없음');
+      errors.push(actualRow + '행: 연락처 없음');
+      errorCount++;
+      return;
+    }
+
+    var company = cleanString(row[1]) || '(이름 없음)';
+
+    var result = callSubmitRpc({
+      p_workspace_id:  WORKSPACE_ID,
+      p_company:       company,
+      p_phone:         phone,
+      p_lead_source:   '당근',
+      p_business_type: cleanString(row[3]),
+      p_industry:      cleanString(row[4]),
+      p_business_age:  cleanString(row[5]),
+      p_received_date: parseDateSafe(row[0]),
+    });
+
+    if (result.status === 'success') {
+      sheet.getRange(actualRow, 7).setValue('✅ ' + today + ' 성공');
+      sheet.getRange(actualRow, 8).setValue('');
+      successCount++;
+
+    } else if (result.status === 'duplicate') {
+      sheet.getRange(actualRow, 7).setValue('🔁 ' + today + ' 중복(기존고객)');
+      sheet.getRange(actualRow, 8).setValue(result.message);
+      duplicateCount++;
+
+    } else {
+      sheet.getRange(actualRow, 7).setValue('❌ ' + today + ' 실패');
+      sheet.getRange(actualRow, 8).setValue(result.message);
+      errors.push(actualRow + '행 (' + company + '): ' + result.message);
+      errorCount++;
+    }
+
+    Utilities.sleep(200);
+  });
+
+  var msg = '✅ 신규 등록: ' + successCount + '건\n'
+          + '🔁 중복(기존고객): ' + duplicateCount + '건\n'
+          + '⏭️ 기처리 스킵: ' + skipCount + '건';
+
+  if (errorCount > 0) {
+    msg += '\n❌ 오류: ' + errorCount + '건\n\n' + errors.join('\n');
+  }
+
+  SpreadsheetApp.getUi().alert(msg);
+}
+
+
+// ============================================================
+// 종합시트 — 미전송 행 일괄 재전송
+// ============================================================
+function resendAll() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet()
+                             .getSheetByName('종합시트');
+  if (!sheet) { Logger.log('[ERROR] 종합시트 없음'); return; }
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) { Logger.log('[ERROR] 데이터 없음'); return; }
+
+  var numCols = Math.max(sheet.getLastColumn(), 16);
+  var data    = sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
+
+  var successCount   = 0;
+  var duplicateCount = 0;
+  var skipCount      = 0;
+  var errorCount     = 0;
+
+  data.forEach(function(row, i) {
+    var actualRow = i + 2;
+
+    if (row[15] && String(row[15]).trim() !== '') { skipCount++; return; }
+    if (!row[COL.업체명] || !row[COL.전화번호])    { skipCount++; return; }
+
+    var customer  = buildCustomerPayload(row);
+    var result    = insertToSupabase(customer);
+    var timestamp = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm');
+
+    if (result.status === 'success') {
+      sheet.getRange(actualRow, 16).setValue('✅ ' + timestamp);
+      successCount++;
+
+    } else if (result.status === 'duplicate') {
+      sheet.getRange(actualRow, 16).setValue('🔁 ' + timestamp + ' 중복');
+      duplicateCount++;
+
+    } else {
+      sheet.getRange(actualRow, 16).setValue('❌ 오류');
+      errorCount++;
+      Logger.log('[ERROR] ' + actualRow + '행: ' + result.message);
+    }
+
+    Utilities.sleep(300);
+  });
+
+  SpreadsheetApp.getUi().alert(
+    '✅ 신규 등록: ' + successCount + '건\n'
+    + '🔁 중복(기존고객): ' + duplicateCount + '건\n'
+    + '⏭️ 스킵: ' + skipCount + '건\n'
+    + '❌ 오류: ' + errorCount + '건'
+  );
+}
+
+
+// ============================================================
+// 메뉴 등록
+// ============================================================
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('📣 당근광고 전송')
+    .addItem('펀딧으로 전송', 'sendDanggeunLeads')
+    .addToUi();
 }
