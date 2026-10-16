@@ -53,11 +53,9 @@ const isYesValue = v => v === true || v === 1 || v === 'true'
 const hasText = v => typeof v === 'string' ? v.trim() !== '' : v != null
 const hasNumber = v => v != null && String(v).trim() !== '' && !Number.isNaN(Number(v))
 
-// 1차콜 입력칸 작성 표시 — 3단계 버튼 '없음' 선택 상태와 같은 계열(연한 초록 배경 + 초록 테두리). 빈칸은 기본 모습 유지
+// 1차콜 입력칸 작성 표시 — 초록 테두리만 (배경은 기본 입력 배경 유지). 빈칸은 기본 모습 유지
 function filledStyle(C) {
-  // 기본 입력 배경(s3) 위에 초록 틴트를 겹침 → 빈칸과 같은 바탕에서 색만 달라짐 (다크·라이트 공통)
-  const tint = `${C.green}22`
-  return { border: `1px solid ${C.green}`, background: `linear-gradient(${tint}, ${tint}), ${C.s3}` }
+  return { border: `1px solid ${C.green}` }
 }
 
 function isCallLogComplete(d) {
@@ -716,11 +714,8 @@ function TabCallLog({ data, onChange, isMobile }) {
       <FieldWrapper label="개인·법인">
         <select value={data.business_type ?? ''} style={textStyle(data.business_type)}
           onChange={e => onChange('business_type', e.target.value || null)}>
-          {/* select 배경이 반투명(작성 표시)일 때 드롭다운 목록이 비쳐 보이지 않도록 option 배경 고정 */}
-          <option value="" style={{ background: C.s2, color: C.text }}>선택</option>
-          {BUSINESS_TYPE_LIST.map(opt => (
-            <option key={opt} value={opt} style={{ background: C.s2, color: C.text }}>{opt}</option>
-          ))}
+          <option value="">선택</option>
+          {BUSINESS_TYPE_LIST.map(opt => <option key={opt} value={opt}>{opt}</option>)}
         </select>
       </FieldWrapper>
       <FieldWrapper label="소재지">
@@ -813,12 +808,13 @@ function TabCallLog({ data, onChange, isMobile }) {
               <label key={opt} style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
                 padding: '5px 10px', borderRadius: 999, cursor: 'pointer',
-                border: `1px solid ${checked ? C.gold : C.line}`,
-                background: checked ? `${C.gold}22` : C.s3,
-                color: checked ? C.gold : C.sub, fontSize: 12, fontWeight: 600,
+                // 선택 색은 3단계 버튼 선택 상태(초록)와 통일
+                border: `1px solid ${checked ? C.green : C.line}`,
+                background: checked ? `${C.green}22` : C.s3,
+                color: checked ? C.green : C.sub, fontSize: 12, fontWeight: 600,
               }}>
                 <input type="checkbox" checked={checked} onChange={() => toggleCert(opt)}
-                  style={{ accentColor: C.gold, margin: 0 }} />
+                  style={{ accentColor: C.green, margin: 0 }} />
                 {opt}
               </label>
             )
