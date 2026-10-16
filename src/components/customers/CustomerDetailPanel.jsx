@@ -53,6 +53,13 @@ const isYesValue = v => v === true || v === 1 || v === 'true'
 const hasText = v => typeof v === 'string' ? v.trim() !== '' : v != null
 const hasNumber = v => v != null && String(v).trim() !== '' && !Number.isNaN(Number(v))
 
+// 1차콜 입력칸 작성 표시 — 3단계 버튼 '없음' 선택 상태와 같은 계열(연한 초록 배경 + 초록 테두리). 빈칸은 기본 모습 유지
+function filledStyle(C) {
+  // 기본 입력 배경(s3) 위에 초록 틴트를 겹침 → 빈칸과 같은 바탕에서 색만 달라짐 (다크·라이트 공통)
+  const tint = `${C.green}22`
+  return { border: `1px solid ${C.green}`, background: `linear-gradient(${tint}, ${tint}), ${C.s3}` }
+}
+
 function isCallLogComplete(d) {
   if (!CALL_LOG_NUMBER_FIELDS.every(f => hasNumber(d[f]))) return false
   if (!CALL_LOG_TEXT_FIELDS.every(f => hasText(d[f]))) return false
@@ -608,16 +615,18 @@ function TabBasic({ data, onChange, consultants, isMobile }) {
 
 // ─── 숫자 입력 + 단위 (숫자만 허용, 빈칸 → null) ──────────────────────
 // prefix: 입력칸 안쪽 앞에 붙는 소제목 (예: KCB) — 소제목 줄 없이 다른 입력칸과 같은 높이 유지
-function NumberInput({ value, onChange, unit, prefix, maxLength, placeholder = '0' }) {
+// markFilled: 값이 있으면(0 포함) 작성 표시 스타일 적용 (1차콜 탭)
+function NumberInput({ value, onChange, unit, prefix, maxLength, placeholder = '0', markFilled = false }) {
   const C = useT()
   const inputStyle = useInputStyle()
+  const filled = markFilled && hasNumber(value) ? filledStyle(C) : null
   const input = (
     <input
       type="text"
       inputMode="numeric"
       style={prefix
         ? { ...inputStyle, flex: 1, minWidth: 0, border: 'none', background: 'transparent', paddingLeft: 0, borderRadius: 0 }
-        : { ...inputStyle, flex: 1, minWidth: 0 }}
+        : { ...inputStyle, flex: 1, minWidth: 0, ...filled }}
       value={value ?? ''}
       maxLength={maxLength}
       onChange={e => {
@@ -634,6 +643,7 @@ function NumberInput({ value, onChange, unit, prefix, maxLength, placeholder = '
         <div style={{
           display: 'flex', alignItems: 'center', flex: 1, minWidth: 0,
           border: `1px solid ${C.line}`, borderRadius: inputStyle.borderRadius, background: C.s3,
+          ...filled,
         }}>
           <span style={{ color: C.sub, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', padding: '0 8px 0 10px' }}>
             {prefix}
@@ -664,6 +674,9 @@ function TabCallLog({ data, onChange, isMobile }) {
   }, [data.call_notes])
 
   const isYes = isYesValue
+  // 작성 표시 — 판단 기준은 탭 점등(isCallLogComplete)과 동일
+  const filled = ok => (ok ? filledStyle(C) : null)
+  const textStyle = (v, extra) => ({ ...inputStyle, ...extra, ...filled(hasText(v)) })
 
   const certs = Array.isArray(data.certifications) ? data.certifications : []
   const toggleCert = (opt) => {
@@ -681,60 +694,63 @@ function TabCallLog({ data, onChange, isMobile }) {
 
       {/* 1. 대표자명 / 2. 사업자명 */}
       <FieldWrapper label="대표자명">
-        <input style={inputStyle} value={data.ceo ?? ''}
+        <input style={textStyle(data.ceo)} value={data.ceo ?? ''}
           onChange={e => onChange('ceo', e.target.value)} placeholder="대표자명" />
       </FieldWrapper>
       <FieldWrapper label="사업자명">
-        <input style={inputStyle} value={data.company ?? ''}
+        <input style={textStyle(data.company)} value={data.company ?? ''}
           onChange={e => onChange('company', e.target.value)} placeholder="업체명" />
       </FieldWrapper>
 
       {/* 3. 업태 / 업종 */}
       <FieldWrapper label="업태">
-        <input style={inputStyle} value={data.business_category ?? ''}
+        <input style={textStyle(data.business_category)} value={data.business_category ?? ''}
           onChange={e => onChange('business_category', e.target.value || null)} placeholder="예: 도소매, 제조" />
       </FieldWrapper>
       <FieldWrapper label="업종">
-        <input style={inputStyle} value={data.industry ?? ''}
+        <input style={textStyle(data.industry)} value={data.industry ?? ''}
           onChange={e => onChange('industry', e.target.value)} placeholder="업종" />
       </FieldWrapper>
 
       {/* 4. 개인·법인 / 5. 소재지 */}
       <FieldWrapper label="개인·법인">
-        <select value={data.business_type ?? ''} style={inputStyle}
+        <select value={data.business_type ?? ''} style={textStyle(data.business_type)}
           onChange={e => onChange('business_type', e.target.value || null)}>
-          <option value="">선택</option>
-          {BUSINESS_TYPE_LIST.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+          {/* select 배경이 반투명(작성 표시)일 때 드롭다운 목록이 비쳐 보이지 않도록 option 배경 고정 */}
+          <option value="" style={{ background: C.s2, color: C.text }}>선택</option>
+          {BUSINESS_TYPE_LIST.map(opt => (
+            <option key={opt} value={opt} style={{ background: C.s2, color: C.text }}>{opt}</option>
+          ))}
         </select>
       </FieldWrapper>
       <FieldWrapper label="소재지">
-        <input style={inputStyle} value={data.address ?? ''}
+        <input style={textStyle(data.address)} value={data.address ?? ''}
           onChange={e => changeAddress(e.target.value, data, onChange)}
           placeholder="시/군/구까지 입력하면 지역이 자동 선택됩니다" />
       </FieldWrapper>
 
       {/* 6. 사업자설립일 / 7. 4대보험 가입자 수 */}
       <FieldWrapper label="사업자설립일">
-        <input type="date" style={inputStyle}
+        <input type="date" style={textStyle(data.business_reg_date)}
           value={clampDateYear(data.business_reg_date) ?? ''}
           onChange={e => onChange('business_reg_date', clampDateYear(e.target.value))}
           min="1900-01-01" max="2099-12-31" />
       </FieldWrapper>
       <FieldWrapper label="4대보험 가입자 수">
-        <NumberInput value={data.employee_count} unit="명" maxLength={6}
+        <NumberInput markFilled value={data.employee_count} unit="명" maxLength={6}
           onChange={v => onChange('employee_count', v)} />
       </FieldWrapper>
 
       {/* 8. 전년도 연매출 / 9. 신용점수 — KCB/NICE 는 입력칸 안쪽 prefix (소제목 줄 없이 같은 높이) */}
       <FieldWrapper label="전년도 연매출">
-        <NumberInput value={data.prev_year_revenue} unit="만원" maxLength={12}
+        <NumberInput markFilled value={data.prev_year_revenue} unit="만원" maxLength={12}
           onChange={v => onChange('prev_year_revenue', v)} />
       </FieldWrapper>
       <FieldWrapper label="신용점수">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <NumberInput value={data.kcb_score} prefix="KCB" maxLength={4}
+          <NumberInput markFilled value={data.kcb_score} prefix="KCB" maxLength={4}
             onChange={v => onChange('kcb_score', v)} />
-          <NumberInput value={data.nice_score} prefix="NICE" maxLength={4}
+          <NumberInput markFilled value={data.nice_score} prefix="NICE" maxLength={4}
             onChange={v => onChange('nice_score', v)} />
         </div>
       </FieldWrapper>
@@ -747,7 +763,7 @@ function TabCallLog({ data, onChange, isMobile }) {
             ['loan_business', '사업자'],
             ['loan_personal', '개인'],
           ].map(([field, label]) => (
-            <NumberInput key={field} value={data[field]} prefix={label} maxLength={12}
+            <NumberInput markFilled key={field} value={data[field]} prefix={label} maxLength={12}
               onChange={v => onChange(field, v)} />
           ))}
         </div>
@@ -762,7 +778,7 @@ function TabCallLog({ data, onChange, isMobile }) {
       <FieldWrapper label="회생·파산 등 사고이력" spanFull>
         <TriStatePair value={data.rehabilitation} onChange={v => onChange('rehabilitation', v)} />
         {isYes(data.rehabilitation) && (
-          <input style={{ ...inputStyle, marginTop: 8 }} value={data.rehabilitation_memo ?? ''}
+          <input style={textStyle(data.rehabilitation_memo, { marginTop: 8 })} value={data.rehabilitation_memo ?? ''}
             onChange={e => onChange('rehabilitation_memo', e.target.value || null)}
             placeholder="사고이력 내용 (예: 2022년 개인회생 인가, 변제 진행 중)" />
         )}
@@ -773,7 +789,7 @@ function TabCallLog({ data, onChange, isMobile }) {
         <TriStatePair value={data.tax_delinquent} onChange={v => onChange('tax_delinquent', v)} />
         {isYes(data.tax_delinquent) && (
           <div style={{ marginTop: 8 }}>
-            <NumberInput value={data.tax_delinquent_amount} unit="만원" maxLength={12}
+            <NumberInput markFilled value={data.tax_delinquent_amount} unit="만원" maxLength={12}
               placeholder="체납 금액"
               onChange={v => onChange('tax_delinquent_amount', v)} />
           </div>
@@ -782,7 +798,7 @@ function TabCallLog({ data, onChange, isMobile }) {
       <FieldWrapper label="폐업이력">
         <TriStatePair value={data.closure_history} onChange={v => onChange('closure_history', v)} />
         {isYes(data.closure_history) && (
-          <input style={{ ...inputStyle, marginTop: 8 }} value={data.closure_memo ?? ''}
+          <input style={textStyle(data.closure_memo, { marginTop: 8 })} value={data.closure_memo ?? ''}
             onChange={e => onChange('closure_memo', e.target.value || null)}
             placeholder="폐업 시기·사유 등" />
         )}
@@ -809,7 +825,7 @@ function TabCallLog({ data, onChange, isMobile }) {
           })}
         </div>
         {certs.includes('기타') && (
-          <input style={{ ...inputStyle, marginTop: 8 }} value={data.certification_etc ?? ''}
+          <input style={textStyle(data.certification_etc, { marginTop: 8 })} value={data.certification_etc ?? ''}
             onChange={e => onChange('certification_etc', e.target.value || null)}
             placeholder="기타 인증 내용" />
         )}
@@ -817,7 +833,7 @@ function TabCallLog({ data, onChange, isMobile }) {
 
       {/* 15. 필요자금 */}
       <FieldWrapper label="필요자금">
-        <NumberInput value={data.required_funds} unit="만원" maxLength={12}
+        <NumberInput markFilled value={data.required_funds} unit="만원" maxLength={12}
           onChange={v => onChange('required_funds', v)} />
       </FieldWrapper>
 
@@ -826,7 +842,7 @@ function TabCallLog({ data, onChange, isMobile }) {
         <textarea
           ref={notesRef}
           rows={4}
-          style={{ ...inputStyle, resize: 'none', lineHeight: 1.6, overflow: 'hidden' }}
+          style={textStyle(data.call_notes, { resize: 'none', lineHeight: 1.6, overflow: 'hidden' })}
           defaultValue={data.call_notes ?? ''}
           onChange={e => {
             autoResizeTextarea(e.target)
